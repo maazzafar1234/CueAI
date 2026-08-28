@@ -16,6 +16,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+const DOWNLOAD_URL =
+  "https://github.com/maazzafar1234/CueAI/releases/download/v1.0.0/CueAI-Teleprompter.exe";
+
 const fadeInUp = {
   hidden: { opacity: 0, y: 35 },
   visible: {
@@ -85,8 +88,9 @@ export default function Home() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
           >
             <a
-              href="/downloads/CueAI-Teleprompter.exe"
-              download="CueAI-Teleprompter.exe"
+              href={DOWNLOAD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 flex items-center justify-center gap-2"
             >
               <Download className="w-5 h-5" />
@@ -496,8 +500,9 @@ export default function Home() {
               stealth overlay support.
             </p>
             <a
-              href="/downloads/CueAI-Teleprompter.exe"
-              download="CueAI-Teleprompter.exe"
+              href={DOWNLOAD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="block w-full py-3 px-6 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition"
             >
               Download Standalone .exe
