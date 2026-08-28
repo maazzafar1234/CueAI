@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+cue-desktop/node_modules/
+.next/
+
+# Production builds & binaries
+dist/
+cue-desktop/dist/
+out/
+dist-clean/
+build/
+
+# Environment variables & local logs
+.env
+.env.local
+*.log
+*.exe
+interview-session-log.md
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+public/downloads/*.exe

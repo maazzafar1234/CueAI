@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CueAI Teleprompter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Prism.js Dark Theme for Syntax Highlighting -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
+    />
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #020617;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #10b981;
+      }
+
+      .drag-region {
+        -webkit-app-region: drag;
+      }
+      .no-drag {
+        -webkit-app-region: no-drag !important;
+        pointer-events: auto !important;
+      }
+
+      .prose p {
+        margin-bottom: 0.65rem;
+      }
+      .prose ul {
+        list-style-type: disc;
+        padding-left: 1.25rem;
+        margin-bottom: 0.65rem;
+      }
+      .prose ol {
+        list-style-type: decimal;
+        padding-left: 1.25rem;
+        margin-bottom: 0.65rem;
+      }
+      .prose strong {
+        color: #34d399;
+        font-weight: 600;
+      }
+
+      /* Custom Styling for Code Syntax Highlighting */
+      .prose code {
+        background-color: #0f172a;
+        color: #38bdf8;
+        padding: 0.15rem 0.35rem;
+        border-radius: 0.25rem;
+        font-family: "Fira Code", Monaco, Consolas, monospace;
+        font-size: 0.85rem;
+        border: 1px solid #1e293b;
+      }
+      .prose pre {
+        background-color: #020617 !important;
+        border: 1px solid #1e293b;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        overflow-x: auto;
+      }
+      .prose pre code {
+        background: transparent !important;
+        padding: 0;
+        border: none;
+        color: #a7f3d0;
+      }
+
+      /* Smooth Scroll Behavior */
+      #cue-content {
+        scroll-behavior: smooth;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-transparent m-0 p-2 font-sans overflow-hidden h-screen flex flex-col"
+  >
+    <div
+      class="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl p-4 shadow-2xl text-slate-100 flex-1 flex flex-col justify-between overflow-hidden"
+    >
+      <!-- Header Drag Region -->
+      <div
+        class="drag-region flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2 cursor-move select-none"
+      >
+        <div
+          class="flex items-center gap-2 text-sm font-semibold text-emerald-400"
+        >
+          <span
+            class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"
+          ></span>
+          <span>CueAI Teleprompter</span>
+        </div>
+
+        <!-- No-Drag Window & Action Controls -->
+        <div class="no-drag flex items-center gap-1.5">
+          <button
+            id="btn-hide"
+            title="Hide Overlay (Ctrl+Shift+H to restore)"
+            class="px-2 py-0.5 text-xs bg-slate-900 hover:bg-slate-800 text-slate-400 rounded border border-slate-800 transition cursor-pointer"
+          >
+            Hide
+          </button>
+          <button
+            id="btn-minimize"
+            title="Minimize"
+            class="w-6 h-6 flex items-center justify-center text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
+          >
+            &minus;
+          </button>
+          <button
+            id="btn-maximize"
+            title="Maximize"
+            class="w-6 h-6 flex items-center justify-center text-xs text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
+          >
+            &#9633;
+          </button>
+          <button
+            id="btn-close"
+            title="Close"
+            class="w-6 h-6 flex items-center justify-center text-sm text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded transition cursor-pointer"
+          >
+            &times;
+          </button>
+
+          <button
+            id="mic-btn"
+            class="no-drag bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <span
+              id="mic-icon"
+              class="w-2 h-2 rounded-full bg-slate-500"
+            ></span>
+            <span id="mic-text">Whisper STT: OFF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- AI Cue Display Container with Auto-Scroll -->
+      <div
+        id="cue-content"
+        class="no-drag overflow-y-auto space-y-2 text-sm leading-relaxed text-slate-200 flex-1 pr-2 my-2 prose select-text"
+      >
+        <p class="text-slate-500 italic font-sans text-xs">
+          Type a question below or turn on Whisper STT (or press Ctrl+Space) to
+          capture interviewer audio...
+        </p>
+      </div>
+
+      <!-- Direct Input Prompt Bar -->
+      <div class="no-drag border-t border-slate-800 pt-2.5 flex gap-2">
+        <input
+          type="text"
+          id="question-input"
+          placeholder="Ask question manually..."
+          class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-sans"
+        />
+        <button
+          id="send-btn"
+          class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition font-sans cursor-pointer"
+        >
+          Cue
+        </button>
+      </div>
+
+      <!-- Footer Status Bar -->
+      <div
+        class="pt-2 mt-1 flex items-center justify-between text-[11px] text-slate-500 font-mono select-none border-t border-slate-900"
+      >
+        <span id="status-text">Whisper STT Ready</span>
+        <div class="flex items-center gap-2 text-slate-400">
+          <span
+            >STT:
+            <kbd
+              class="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-400 border border-slate-800"
+              >Ctrl+Space</kbd
+            ></span
+          >
+          <span
+            >Window:
+            <kbd
+              class="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-400 border border-slate-800"
+              >Ctrl+Shift+H</kbd
+            ></span
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- Prism.js Code Highlighting Engines -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+    <script>
+      const cueContent = document.getElementById("cue-content");
+      const questionInput = document.getElementById("question-input");
+      const sendBtn = document.getElementById("send-btn");
+      const statusText = document.getElementById("status-text");
+
+      const micBtn = document.getElementById("mic-btn");
+      const micIcon = document.getElementById("mic-icon");
+      const micText = document.getElementById("mic-text");
+
+      let rawAccumulatedText = "";
+      let isWhisperActive = false;
+      let audioContext = null;
+      let mediaStream = null;
+      let scriptProcessor = null;
+      let pcmBuffer = [];
+
+      // Window Action Listeners
+      document
+        .getElementById("btn-hide")
+        .addEventListener("click", () => window.electronAPI.hideWindow());
+      document
+        .getElementById("btn-minimize")
+        .addEventListener("click", () => window.electronAPI.minimizeWindow());
+      document
+        .getElementById("btn-maximize")
+        .addEventListener("click", () => window.electronAPI.maximizeWindow());
+      document
+        .getElementById("btn-close")
+        .addEventListener("click", () => window.electronAPI.closeWindow());
+
+      window.electronAPI.onStatusUpdate((status) => {
+        statusText.innerText = status;
+      });
+
+      function submitQuestion(qText) {
+        const q = (qText || questionInput.value).trim();
+        if (!q) return;
+        window.electronAPI.askAI(q);
+        if (!qText) questionInput.value = "";
+      }
+
+      sendBtn.addEventListener("click", () => submitQuestion());
+      questionInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitQuestion();
+      });
+
+      // Browser Audio Capture Engine
+      async function startInterviewerAudioCapture() {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: true,
+            },
+            video: false,
+          });
+
+          audioContext = new (window.AudioContext || window.webkitAudioContext)(
+            { sampleRate: 16000 },
+          );
+
+          if (audioContext.state === "suspended") {
+            await audioContext.resume();
+          }
+
+          const source = audioContext.createMediaStreamSource(mediaStream);
+          scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+          scriptProcessor.onaudioprocess = (e) => {
+            if (!isWhisperActive) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+
+            pcmBuffer.push(...inputData);
+
+            // Send ~3s of audio chunks (48,000 samples at 16kHz)
+            if (pcmBuffer.length >= 96000) {
+              statusText.innerText = "Analyzing audio chunk...";
+              const chunkToSend = new Float32Array(pcmBuffer);
+              pcmBuffer = [];
+              window.electronAPI.sendAudioChunk(chunkToSend);
+            }
+          };
+
+          source.connect(scriptProcessor);
+
+          const silenceGain = audioContext.createGain();
+          silenceGain.gain.value = 0.0001;
+          scriptProcessor.connect(silenceGain);
+          silenceGain.connect(audioContext.destination);
+
+          statusText.innerText = "Listening for interviewer voice...";
+        } catch (err) {
+          console.error("Audio Stream Error:", err);
+          statusText.innerText = "Mic capture blocked by system.";
+          stopBrowserAudioCapture();
+        }
+      }
+
+      function stopBrowserAudioCapture() {
+        isWhisperActive = false;
+        pcmBuffer = [];
+        if (scriptProcessor) {
+          scriptProcessor.disconnect();
+          scriptProcessor = null;
+        }
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+        }
+
+        micIcon.className = "w-2 h-2 rounded-full bg-slate-500";
+        micText.innerText = "Whisper STT: OFF";
+      }
+
+      micBtn.addEventListener("click", async () => {
+        if (isWhisperActive) {
+          stopBrowserAudioCapture();
+          statusText.innerText = "Listening Stopped";
+        } else {
+          isWhisperActive = true;
+          micIcon.className =
+            "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+          micText.innerText = "Whisper STT: ON";
+          window.electronAPI.resumeListenLock?.();
+          await startInterviewerAudioCapture();
+        }
+      });
+
+      // Global Hotkey Trigger (Ctrl+Space)
+      window.electronAPI.onHotkeySTTToggle(() => {
+        micBtn.click();
+      });
+
+      // Clear Teleprompter Screen Trigger (Ctrl+Shift+X)
+      if (window.electronAPI.onClearCue) {
+        window.electronAPI.onClearCue(() => {
+          rawAccumulatedText = "";
+          cueContent.innerHTML =
+            '<p class="text-slate-500 italic font-sans text-xs">Type a question below or turn on Whisper STT (or press Ctrl+Space) to capture interviewer audio...</p>';
+        });
+      }
+
+      // Helper function to auto-scroll to the bottom of the container
+      function scrollToBottom() {
+        cueContent.scrollTop = cueContent.scrollHeight;
+      }
+
+      // AI Response Stream Handlers with Prism Highlighting & Smooth Auto-Scroll
+      window.electronAPI.onAIStart(() => {
+        rawAccumulatedText = "";
+        statusText.innerText = "Generating candidate cue...";
+        cueContent.innerHTML =
+          '<div class="text-emerald-400 font-medium animate-pulse text-xs">Generating response...</div>';
+      });
+
+      window.electronAPI.onAIStreamChunk((chunk) => {
+        rawAccumulatedText += chunk;
+        cueContent.innerHTML = marked.parse(rawAccumulatedText);
+
+        // Apply syntax highlighting to streamed code blocks
+        if (window.Prism) {
+          Prism.highlightAllUnder(cueContent);
+        }
+
+        // Auto-scroll as new chunks stream in
+        scrollToBottom();
+      });
+
+      // Local Window Emergency Escape Listener
+      window.addEventListener("keydown", (e) => {
+        // Pressing Escape or Ctrl+Escape while focused on the window aborts stream
+        if (e.key === "Escape") {
+          window.electronAPI.cancelStream?.();
+        }
+      });
+
+      window.electronAPI.onAIEnd(() => {
+        statusText.innerText = "Cue Complete — Paused so you can answer";
+        if (rawAccumulatedText) {
+          cueContent.innerHTML = marked.parse(rawAccumulatedText);
+          if (window.Prism) {
+            Prism.highlightAllUnder(cueContent);
+          }
+          scrollToBottom();
+        }
+        stopBrowserAudioCapture();
+        micText.innerText = "Resume STT";
+        micIcon.className = "w-2 h-2 rounded-full bg-amber-400";
+      });
+    </script>
+  </body>
+</html>
