@@ -1,7 +1,7 @@
 "use client";
 
 import Navbar from "@/components/Navbar";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import {
   Play,
   Zap,
@@ -19,7 +19,8 @@ import {
 const DOWNLOAD_URL =
   "https://github.com/maazzafar1234/CueAI/releases/download/v1.0.0/CueAI-Teleprompter.exe";
 
-const fadeInUp = {
+// Explicitly type variants using Framer Motion's `Variants` type
+const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 35 },
   visible: {
     opacity: 1,
@@ -28,7 +29,7 @@ const fadeInUp = {
   },
 };
 
-const staggerContainer = {
+const staggerContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
