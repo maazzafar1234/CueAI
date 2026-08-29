@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-// Route segment config (Optional: Edge runtime accelerates response generation)
+// Route segment config
 export const runtime = "edge";
 
 // Image Metadata Config
@@ -13,7 +13,6 @@ export const contentType = "image/png";
 
 export default async function Image() {
   return new ImageResponse(
-    // Image Container (Only Flexbox layout is supported, no grid!)
     <div
       style={{
         height: "100%",
@@ -23,12 +22,10 @@ export default async function Image() {
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#030712",
-        backgroundImage:
-          "radial-gradient(circle at 25px 25px, rgba(31, 41, 55, 0.4) 2px, transparent 0)",
-        backgroundSize: "48px 48px",
         color: "#f8fafc",
         padding: "40px 80px",
         textAlign: "center",
+        fontFamily: "sans-serif",
       }}
     >
       {/* Badge */}
@@ -36,14 +33,15 @@ export default async function Image() {
         style={{
           display: "flex",
           alignItems: "center",
-          padding: "8px 18px",
+          justifyContent: "center",
+          padding: "10px 24px",
           borderRadius: "9999px",
-          border: "1px solid rgba(16, 185, 129, 0.3)",
-          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          border: "1px solid rgba(16, 185, 129, 0.4)",
+          backgroundColor: "rgba(16, 185, 129, 0.12)",
           color: "#34d399",
-          fontSize: 20,
+          fontSize: 22,
           fontWeight: 600,
-          marginBottom: 32,
+          marginBottom: 36,
         }}
       >
         CueAI v1.0 • Undetectable Overlay Engine
@@ -52,20 +50,21 @@ export default async function Image() {
       {/* Dynamic Title */}
       <div
         style={{
-          fontSize: 64,
+          fontSize: 60,
           fontWeight: 800,
           letterSpacing: "-0.025em",
-          lineHeight: 1.1,
-          marginBottom: 24,
+          lineHeight: 1.15,
+          marginBottom: 28,
           display: "flex",
           flexWrap: "wrap",
           justifyContent: "center",
+          alignItems: "center",
         }}
       >
-        Ace Virtual Interviews with
+        <span>Ace Virtual Interviews with</span>
         <span
           style={{
-            marginLeft: "12px",
+            marginLeft: "14px",
             color: "#34d399",
           }}
         >
@@ -78,8 +77,10 @@ export default async function Image() {
         style={{
           fontSize: 26,
           color: "#94a3b8",
-          maxWidth: "900px",
-          lineHeight: 1.4,
+          maxWidth: "880px",
+          lineHeight: 1.45,
+          display: "flex",
+          justifyContent: "center",
         }}
       >
         Screen-share safe, sub-second streaming answers on a transparent desktop
