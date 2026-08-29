@@ -1,15 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// Dynamic site URL resolution for local, Vercel preview, and production builds
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "https://cue-ai.vercel.app");
+  process.env.NEXT_PUBLIC_SITE_URL || "https://cueai-gold.vercel.app";
 
 export const metadata: Metadata = {
-  // CRITICAL: metadataBase allows opengraph-image.tsx to build an absolute URL
   metadataBase: new URL(siteUrl),
   title: {
     default: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
@@ -28,17 +23,23 @@ export const metadata: Metadata = {
   authors: [{ name: "Maaz Zafar", url: "https://github.com/maazzafar1234" }],
   creator: "Maaz Zafar",
 
-  // Open Graph / Facebook / LinkedIn / Discord
+  // Open Graph / Facebook / LinkedIn / WhatsApp / Discord
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "Listen live during video calls and get instant, tailored answers on a transparent overlay. Completely undetected and screen-share safe.",
+      "Listen live during video calls and get instant, tailored answers on a transparent overlay.",
     siteName: "CueAI",
-    // NOTE: Do NOT add `images: [...]` here.
-    // app/opengraph-image.tsx automatically generates and attaches the dynamic OG image tags!
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "CueAI - Real-Time AI Teleprompter Overlay Preview",
+      },
+    ],
   },
 
   // Twitter / X Card
@@ -46,11 +47,10 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "Undetectable transparent overlay supplying real-time interview cues powered by Whisper STT & LLMs.",
-    // NOTE: app/opengraph-image.tsx handles Twitter images automatically as well
+      "Undetectable transparent overlay supplying real-time interview cues.",
+    images: ["/og-image.png"],
   },
 
-  // Robots indexing
   robots: {
     index: true,
     follow: true,
