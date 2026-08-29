@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://cueai-gold.vercel.app";
+// Hardcode production URL to avoid missing domain resolution
+const siteUrl = "https://cueai-gold.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: {
-    default: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
-    template: "%s | CueAI",
-  },
+  title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
   description:
-    "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
+    "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay. Never get caught off guard during technical interviews.",
   keywords: [
     "AI Teleprompter",
     "Virtual Interview Assistant",
@@ -23,18 +20,18 @@ export const metadata: Metadata = {
   authors: [{ name: "Maaz Zafar", url: "https://github.com/maazzafar1234" }],
   creator: "Maaz Zafar",
 
-  // Open Graph / Facebook / LinkedIn / WhatsApp / Discord
+  // Explicit Open Graph tags for LinkedIn, Facebook, WhatsApp, Twitter
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "Listen live during video calls and get instant, tailored answers on a transparent overlay.",
+      "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay. Never get caught off guard during technical interviews.",
     siteName: "CueAI",
     images: [
       {
-        url: "/og-image.png",
+        url: `${siteUrl}/api/og`,
         width: 1200,
         height: 630,
         alt: "CueAI - Real-Time AI Teleprompter Overlay Preview",
@@ -42,13 +39,12 @@ export const metadata: Metadata = {
     ],
   },
 
-  // Twitter / X Card
   twitter: {
     card: "summary_large_image",
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "Undetectable transparent overlay supplying real-time interview cues.",
-    images: ["/og-image.png"],
+      "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
+    images: [`${siteUrl}/api/og`],
   },
 
   robots: {
