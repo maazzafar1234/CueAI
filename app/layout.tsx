@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-// Hardcode production URL to avoid missing domain resolution
 const siteUrl = "https://cueai-gold.vercel.app";
 
 export const metadata: Metadata = {
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Maaz Zafar", url: "https://github.com/maazzafar1234" }],
   creator: "Maaz Zafar",
 
-  // Explicit Open Graph tags for LinkedIn, Facebook, WhatsApp, Twitter
+  // Open Graph / Facebook / LinkedIn / WhatsApp / Discord
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -31,20 +30,21 @@ export const metadata: Metadata = {
     siteName: "CueAI",
     images: [
       {
-        url: `${siteUrl}/api/og`,
+        url: "/og-image.png", // Next.js will resolve this against metadataBase
         width: 1200,
         height: 630,
-        alt: "CueAI - Real-Time AI Teleprompter Overlay Preview",
+        alt: "CueAI Teleprompter Preview",
       },
     ],
   },
 
+  // Twitter / X Card
   twitter: {
     card: "summary_large_image",
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
       "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
-    images: [`${siteUrl}/api/og`],
+    images: ["/og-image.png"],
   },
 
   robots: {
