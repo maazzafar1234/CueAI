@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
   description:
-    "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay. Never get caught off guard during technical interviews.",
+    "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
   keywords: [
     "AI Teleprompter",
     "Virtual Interview Assistant",
@@ -26,13 +26,14 @@ export const metadata: Metadata = {
     url: siteUrl,
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay. Never get caught off guard during technical interviews.",
+      "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
     siteName: "CueAI",
     images: [
       {
-        url: "/og-image1.png", // Next.js will resolve this against metadataBase
+        url: `${siteUrl}/og-image1.png`, // Explicitly pointing to og-image1.png
         width: 1200,
         height: 630,
+        type: "image/png",
         alt: "CueAI Teleprompter Preview",
       },
     ],
@@ -43,8 +44,8 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
-      "CueAI listens live during video calls and renders instant, tailored responses on a transparent, screen-share-invisible overlay.",
-    images: ["/og-image1.png"],
+      "CueAI listens live during video calls and renders instant, tailored responses on a transparent overlay.",
+    images: [`${siteUrl}/og-image1.png`],
   },
 
   robots: {
