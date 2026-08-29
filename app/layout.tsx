@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://cue-ai.vercel.app";
+// Dynamic site URL resolution for local, Vercel preview, and production builds
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://cue-ai.vercel.app");
 
 export const metadata: Metadata = {
+  // CRITICAL: metadataBase allows opengraph-image.tsx to build an absolute URL
   metadataBase: new URL(siteUrl),
   title: {
     default: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
@@ -31,14 +37,8 @@ export const metadata: Metadata = {
     description:
       "Listen live during video calls and get instant, tailored answers on a transparent overlay. Completely undetected and screen-share safe.",
     siteName: "CueAI",
-    images: [
-      {
-        url: "/og-image.png", // Located at public/og-image.png
-        width: 1200,
-        height: 630,
-        alt: "CueAI - Real-Time AI Teleprompter Overlay Preview",
-      },
-    ],
+    // NOTE: Do NOT add `images: [...]` here.
+    // app/opengraph-image.tsx automatically generates and attaches the dynamic OG image tags!
   },
 
   // Twitter / X Card
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     title: "CueAI — Real-Time AI Teleprompter for Virtual Interviews",
     description:
       "Undetectable transparent overlay supplying real-time interview cues powered by Whisper STT & LLMs.",
-    images: ["/og-image.png"],
+    // NOTE: app/opengraph-image.tsx handles Twitter images automatically as well
   },
 
   // Robots indexing
