@@ -7,18 +7,14 @@ import os from "os";
 dotenv.config({ path: ".env.local" });
 
 const rawKey = process.env.GROQ_API_KEY ? process.env.GROQ_API_KEY.trim() : "";
-
 const groq = new Groq({ apiKey: rawKey });
 
-// Technical domain prompt to prevent technical name misinterpretations
 const TECHNICAL_PROMPT =
   "Software Engineering, Java, OOPs, Object-Oriented Programming, String Pool, JavaScript, React, Node.js, Express, SQL, REST API, Data Structures, Algorithms, Hexaview.";
 
-// List of common hallucinations output by Whisper when transcribing background noise/silence
-const HALLUCINATION_PHRASES = [
-  "thank you for watching",
-  "thanks for watching",
-  "subscribe",
+const IGNORED_PHRASES = [
+  "thank you",
+  "thanks",
   "bye",
   "subtitles by",
   "amara.org",
@@ -26,25 +22,21 @@ const HALLUCINATION_PHRASES = [
   ".",
 ];
 
+let audioBufferQueue = [];
+let accumulatedLength = 0;
+const TARGET_CHUNK_SIZE = 16000 * 5; // Accumulate ~5 seconds of audio
+
+// Rate limit protection cooldown tracker
+let lastApiCallTimestamp = 0;
+const COOLDOWN_MS = 7000; // Minimum 7 seconds between Groq API requests to stay under 20 RPM limit
+
 export async function initWhisper() {
-  console.log("Using Groq Cloud Whisper Large V3 for STT.");
+  console.log(
+    "Using Groq Cloud Whisper Large V3 for STT (Rate-Limit Protected).",
+  );
   return true;
 }
 
-/**
- * Calculates audio energy (RMS) to skip silent audio chunks.
- */
-function calculateRMS(samples) {
-  let sum = 0;
-  for (let i = 0; i < samples.length; i++) {
-    sum += samples[i] * samples[i];
-  }
-  return Math.sqrt(sum / samples.length);
-}
-
-/**
- * Encodes PCM Float32 audio data into a 16kHz WAV buffer
- */
 function createWavBuffer(samples, sampleRate = 16000) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
@@ -84,22 +76,38 @@ export async function transcribeAudioBuffer(audioData) {
   const floatArray =
     audioData instanceof Float32Array ? audioData : new Float32Array(audioData);
 
-  // 1. Ignore short audio buffers (< 1 second of audio at 16kHz)
-  if (floatArray.length < 16000) {
+  audioBufferQueue.push(floatArray);
+  accumulatedLength += floatArray.length;
+
+  // Wait until we have accumulated enough audio data (~5 seconds)
+  if (accumulatedLength < TARGET_CHUNK_SIZE) {
     return "";
   }
 
-  // 2. Ignore silent buffers using Voice Activity Gate (RMS Threshold)
-  const rms = calculateRMS(floatArray);
-  if (rms < 0.015) {
-    // Threshold for background ambient noise
+  // 🛑 RATE LIMIT GUARD: Check if we are calling Groq too fast (< 7 seconds apart)
+  const now = Date.now();
+  if (now - lastApiCallTimestamp < COOLDOWN_MS) {
+    // Clear buffer so we don't build up stale audio during cooldown
+    audioBufferQueue = [];
+    accumulatedLength = 0;
     return "";
   }
+
+  const mergedSamples = new Float32Array(accumulatedLength);
+  let offset = 0;
+  for (const chunk of audioBufferQueue) {
+    mergedSamples.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  audioBufferQueue = [];
+  accumulatedLength = 0;
 
   const tempFilePath = path.join(os.tmpdir(), `audio_chunk_${Date.now()}.wav`);
 
   try {
-    const wavBuffer = createWavBuffer(floatArray, 16000);
+    lastApiCallTimestamp = Date.now(); // Stamp time of request
+    const wavBuffer = createWavBuffer(mergedSamples, 16000);
     fs.writeFileSync(tempFilePath, wavBuffer);
 
     const translation = await groq.audio.transcriptions.create({
@@ -116,25 +124,20 @@ export async function transcribeAudioBuffer(audioData) {
     }
 
     let text = translation.text ? translation.text.trim() : "";
-
-    // 3. Filter out Whisper silent background noise hallucinations
     const lowerText = text.toLowerCase();
-    if (
-      HALLUCINATION_PHRASES.some(
-        (phrase) => lowerText === phrase || lowerText.startsWith(phrase),
-      )
-    ) {
-      return "";
-    }
 
-    // 4. Ensure minimum string length to prevent single-word triggers
-    if (text.length < 5) {
+    // Ignore filler words or short phrases that flood your logs and waste limits
+    if (
+      !text ||
+      text.length < 8 ||
+      IGNORED_PHRASES.some((phrase) => lowerText.includes(phrase))
+    ) {
       return "";
     }
 
     return text;
   } catch (error) {
-    console.error("Groq Whisper STT Error:", error.message || error);
+    console.error("Groq Whisper STT Error:", error?.message || error);
     if (fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);
     }

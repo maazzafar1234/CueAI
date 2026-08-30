@@ -1,6 +1,8 @@
 "use client";
 
 import Navbar from "@/components/Navbar";
+import Overlay from "@/components/Overlay";
+import { useState } from "react";
 import { motion, Variants } from "framer-motion";
 import {
   Play,
@@ -8,16 +10,16 @@ import {
   Bot,
   EyeOff,
   Lock,
-  Terminal,
   Download,
   Mic,
   Code2,
-  Key,
   ShieldCheck,
+  ScanLine,
+  Sparkles,
 } from "lucide-react";
 
 const DOWNLOAD_URL =
-  "https://github.com/maazzafar1234/CueAI/releases/download/v1.0.0/CueAI-Teleprompter.exe";
+  "https://github.com/maazzafar1234/CueAI/releases/download/v2.0.0/CueAI-Teleprompter-v2.0.0.exe";
 
 // Explicitly type variants using Framer Motion's `Variants` type
 const fadeInUp: Variants = {
@@ -40,6 +42,8 @@ const staggerContainer: Variants = {
 };
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<"voice" | "screen">("screen");
+
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden scroll-smooth">
       {/* Background Mesh Grid */}
@@ -62,7 +66,7 @@ export default function Home() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 text-xs font-semibold mb-8 backdrop-blur-xl shadow-inner shadow-emerald-500/10"
           >
             <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            CueAI v1.0 Released • Undetectable Overlay Engine
+            CueAI v2.0 Released • Voice & Screen OCR Overlay Engine
           </motion.div>
 
           <motion.h1
@@ -79,9 +83,9 @@ export default function Home() {
             variants={fadeInUp}
             className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed font-normal"
           >
-            CueAI listens live during video calls and renders instant, tailored
-            responses on a transparent overlay—screen-share safe and completely
-            undetected.
+            CueAI listens live during video calls and auto-captures on-screen
+            code or MCQs to render instant, tailored answers on a transparent
+            overlay.
           </motion.p>
 
           <motion.div
@@ -112,95 +116,175 @@ export default function Home() {
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }}
           className="mt-12 max-w-4xl mx-auto rounded-xl border border-slate-800 bg-slate-950/80 p-6 shadow-2xl backdrop-blur-md"
         >
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          {/* Mock Header Controls */}
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-3 mb-4 gap-2">
             <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>CueAI Teleprompter Overlay</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
-              <Mic className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Whisper STT: Active</span>
+
+            {/* Mode Switcher */}
+            <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800">
+              <button
+                onClick={() => setActiveTab("screen")}
+                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
+                  activeTab === "screen"
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <ScanLine className="w-3.5 h-3.5" />
+                Screen Assist (Alt+S)
+              </button>
+              <button
+                onClick={() => setActiveTab("voice")}
+                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition ${
+                  activeTab === "voice"
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                Voice Mode
+              </button>
             </div>
           </div>
 
-          <div className="space-y-4 text-left font-sans text-sm text-slate-200">
-            <div className="text-xs text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/50">
-              ❓ Interviewer Question: "Explain Object-Oriented Programming
-              principles."
-            </div>
+          {/* Dynamic Content Preview */}
+          {activeTab === "screen" ? (
+            <div className="space-y-4 text-left font-sans text-sm text-slate-200 animate-fadeIn">
+              <div className="text-xs text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/50 flex items-center justify-between">
+                <div>
+                  <span className="text-emerald-400 font-bold">
+                    📸 Auto Screen Capture (OCR):
+                  </span>{" "}
+                  "Select the correct output for `console.log(typeof NaN)`."
+                </div>
+                <kbd className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-emerald-400 font-mono">
+                  Alt + S
+                </kbd>
+              </div>
 
-            <div>
-              <div className="text-emerald-400 font-semibold mb-1">
-                🗣️ Interview Answer (What to say):
+              <div>
+                <div className="text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  <span>Instant AI Answer:</span>
+                </div>
+                <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-xs space-y-1">
+                  <p className="font-bold text-emerald-300 text-sm">
+                    Answer: Option B ("number")
+                  </p>
+                  <p className="text-slate-300 leading-relaxed">
+                    <strong>Reasoning:</strong> In JavaScript,{" "}
+                    <code className="text-emerald-400">NaN</code> (Not-a-Number)
+                    is technically a numeric data type defined by IEEE 754
+                    floating-point standard, so{" "}
+                    <code className="text-emerald-400">typeof NaN</code> returns{" "}
+                    <code className="text-emerald-400 font-bold">"number"</code>
+                    .
+                  </p>
+                </div>
               </div>
-              <ul className="list-disc pl-5 text-xs space-y-1 text-slate-300">
-                <li>
-                  Object-Oriented Programming structures software design around
-                  data or objects rather than functions and logic.
-                </li>
-                <li>
-                  Four core pillars include{" "}
-                  <strong className="text-emerald-400 font-semibold">
-                    Encapsulation
-                  </strong>
-                  ,{" "}
-                  <strong className="text-emerald-400 font-semibold">
-                    Inheritance
-                  </strong>
-                  ,{" "}
-                  <strong className="text-emerald-400 font-semibold">
-                    Polymorphism
-                  </strong>
-                  , and{" "}
-                  <strong className="text-emerald-400 font-semibold">
-                    Abstraction
-                  </strong>
-                  .
-                </li>
-              </ul>
-            </div>
 
-            <div>
-              <div className="text-emerald-400 font-semibold mb-1">
-                ⚙️ How It Works (In simple terms):
+              <div>
+                <div className="text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
+                  <Code2 className="w-4 h-4 text-emerald-400" />
+                  <span>💻 Verified Snippet:</span>
+                </div>
+                <div className="bg-[#020617] border border-slate-800 rounded-lg p-3 font-mono text-xs overflow-x-auto text-slate-300">
+                  <pre className="m-0 leading-relaxed">
+                    <code>
+                      <span className="text-emerald-400">console</span>.
+                      <span className="text-blue-400">log</span>(
+                      <span className="text-purple-400">typeof</span>{" "}
+                      <span className="text-yellow-300">NaN</span>);{" "}
+                      <span className="text-slate-500">
+                        // Output: "number"
+                      </span>
+                    </code>
+                  </pre>
+                </div>
               </div>
-              <ul className="list-disc pl-5 text-xs space-y-1 text-slate-300">
-                <li>
-                  Classes serve as blueprints while objects represent
-                  instantiated runtime memory structures.
-                </li>
-              </ul>
             </div>
+          ) : (
+            <div className="space-y-4 text-left font-sans text-sm text-slate-200 animate-fadeIn">
+              <div className="text-xs text-slate-400 font-mono bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/50">
+                ❓ Interviewer Question: "Explain Object-Oriented Programming
+                principles."
+              </div>
 
-            <div>
-              <div className="text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
-                <Code2 className="w-4 h-4 text-emerald-400" />
-                <span>💻 Quick Code Example:</span>
+              <div>
+                <div className="text-emerald-400 font-semibold mb-1">
+                  🗣️ Interview Answer (What to say):
+                </div>
+                <ul className="list-disc pl-5 text-xs space-y-1 text-slate-300">
+                  <li>
+                    Object-Oriented Programming structures software design
+                    around data or objects rather than functions and logic.
+                  </li>
+                  <li>
+                    Four core pillars include{" "}
+                    <strong className="text-emerald-400 font-semibold">
+                      Encapsulation
+                    </strong>
+                    ,{" "}
+                    <strong className="text-emerald-400 font-semibold">
+                      Inheritance
+                    </strong>
+                    ,{" "}
+                    <strong className="text-emerald-400 font-semibold">
+                      Polymorphism
+                    </strong>
+                    , and{" "}
+                    <strong className="text-emerald-400 font-semibold">
+                      Abstraction
+                    </strong>
+                    .
+                  </li>
+                </ul>
               </div>
-              <div className="bg-[#020617] border border-slate-800 rounded-lg p-3 font-mono text-xs overflow-x-auto text-slate-300">
-                <pre className="m-0 leading-relaxed">
-                  <code>
-                    <span className="text-purple-400">class</span>{" "}
-                    <span className="text-yellow-300">Car</span> {"{"}
-                    {"\n"} <span className="text-purple-400">constructor</span>
-                    (brand) {"{"}
-                    {"\n"} <span className="text-cyan-400">this</span>.brand =
-                    brand;{"\n"} {"}"}
-                    {"\n"} <span className="text-blue-400">startEngine</span>(){" "}
-                    {"{"}
-                    {"\n"} <span className="text-emerald-400">console</span>
-                    .log(
-                    <span className="text-emerald-300">
-                      `{"${this.brand}"} engine running`
-                    </span>
-                    );{"\n"} {"}"}
-                    {"\n"}
-                    {"}"}
-                  </code>
-                </pre>
+
+              <div>
+                <div className="text-emerald-400 font-semibold mb-1">
+                  ⚙️ How It Works (In simple terms):
+                </div>
+                <ul className="list-disc pl-5 text-xs space-y-1 text-slate-300">
+                  <li>
+                    Classes serve as blueprints while objects represent
+                    instantiated runtime memory structures.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <div className="text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
+                  <Code2 className="w-4 h-4 text-emerald-400" />
+                  <span>💻 Quick Code Example:</span>
+                </div>
+                <div className="bg-[#020617] border border-slate-800 rounded-lg p-3 font-mono text-xs overflow-x-auto text-slate-300">
+                  <pre className="m-0 leading-relaxed">
+                    <code>
+                      <span className="text-purple-400">class</span>{" "}
+                      <span className="text-yellow-300">Car</span> {"{"}
+                      {"\n"}{" "}
+                      <span className="text-purple-400">constructor</span>
+                      (brand) {"{"}
+                      {"\n"} <span className="text-cyan-400">this</span>.brand =
+                      brand;{"\n"} {"}"}
+                      {"\n"} <span className="text-blue-400">startEngine</span>
+                      () {"{"}
+                      {"\n"} <span className="text-emerald-400">console</span>
+                      .log(
+                      <span className="text-emerald-300">{`\`\${this.brand} engine running\``}</span>
+                      );{"\n"} {"}"}
+                      {"\n"}
+                      {"}"}
+                    </code>
+                  </pre>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </motion.div>
       </section>
 
@@ -221,7 +305,7 @@ export default function Home() {
               Designed for peak performance
             </h2>
             <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base">
-              Sub-second response streaming, intent-based filtering, and global
+              Sub-second response streaming, OCR auto-capture, and global
               hotkeys give you full control.
             </p>
           </motion.div>
@@ -231,8 +315,24 @@ export default function Home() {
             whileInView="visible"
             viewport={{ once: true }}
             variants={staggerContainer}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
           >
+            <motion.div
+              variants={fadeInUp}
+              className="p-8 rounded-2xl bg-gradient-to-b from-slate-900/60 to-slate-900/20 border border-slate-800/80 hover:border-emerald-500/40 transition-all duration-300"
+            >
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
+                <ScanLine className="w-6 h-6 text-emerald-400" />
+              </div>
+              <h3 className="font-bold text-lg text-white mb-2">
+                Auto Screen OCR (Alt+S)
+              </h3>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Silently captures screen regions to solve MCQs, code challenges,
+                or theoretical questions instantly.
+              </p>
+            </motion.div>
+
             <motion.div
               variants={fadeInUp}
               className="p-8 rounded-2xl bg-gradient-to-b from-slate-900/60 to-slate-900/20 border border-slate-800/80 hover:border-emerald-500/40 transition-all duration-300"
@@ -318,11 +418,12 @@ export default function Home() {
                 02
               </div>
               <h3 className="text-white font-bold text-lg mb-2">
-                Interviewer Speaks
+                Speak or Capture Screen
               </h3>
               <p className="text-slate-400 text-sm">
-                Whisper STT listens to the incoming audio buffer, filters out
-                silence or noise, and identifies interview questions.
+                Whisper STT listens to live incoming audio, or press{" "}
+                <code className="text-emerald-400">Alt + S</code> to silently
+                capture MCQs/code directly off screen.
               </p>
             </div>
 
@@ -334,8 +435,8 @@ export default function Home() {
                 Read Live Cues
               </h3>
               <p className="text-slate-400 text-sm">
-                Structured spoken points, technical inner workings, and minimal
-                code snippets stream directly onto your screen.
+                Structured spoken points, theoretical inner workings, and code
+                solutions stream directly onto your transparent screen.
               </p>
             </div>
           </div>
@@ -365,9 +466,10 @@ export default function Home() {
                   Screen Capture Exclusion
                 </h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  Utilizes native OS window display affinity
-                  (`setContentProtection`) to prevent recording software and
-                  screen shares from rendering the teleprompter window.
+                  Utilizes native OS window display affinity (
+                  <code className="text-emerald-400">setContentProtection</code>
+                  ) to prevent recording software and screen shares from
+                  rendering the teleprompter window.
                 </p>
               </div>
             </div>
@@ -380,8 +482,11 @@ export default function Home() {
                 </h3>
                 <p className="text-slate-400 text-sm leading-relaxed">
                   All transcriptions and generated Q&A logs stay on your
-                  computer (`interview-session-log.md`). No personal data is
-                  stored on remote servers.
+                  computer (
+                  <code className="text-emerald-400">
+                    interview-session-log.md
+                  </code>
+                  ). No personal data is stored on remote servers.
                 </p>
               </div>
             </div>
@@ -400,72 +505,88 @@ export default function Home() {
               Zero-Mouse Hotkey Controls
             </h2>
             <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base">
-              Manage speech capture, window stealth, and stream execution using
-              global keyboard shortcuts.
+              Manage speech capture, screen OCR, window stealth, and stream
+              execution using global keyboard shortcuts.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-              <div className="text-xs font-mono text-emerald-400 mb-3 flex items-center justify-between">
-                <span>STT CONTROL</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800">
+              <div className="text-[10px] font-mono text-emerald-400 mb-2 flex items-center justify-between">
+                <span>SCREEN ASSIST</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               </div>
-              <h3 className="text-white font-bold text-base mb-2">
-                Toggle Voice Capture
+              <h3 className="text-white font-bold text-sm mb-1">
+                Auto Capture & Solve
               </h3>
-              <p className="text-slate-400 text-xs leading-relaxed mb-4">
-                Turns Whisper voice listening ON or OFF instantly.
+              <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                Silently captures screen & solves MCQs/code.
               </p>
-              <kbd className="inline-block px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs font-semibold">
-                Ctrl + Space
+              <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs font-semibold">
+                Alt + S
               </kbd>
             </div>
 
-            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-              <div className="text-xs font-mono text-cyan-400 mb-3 flex items-center justify-between">
+            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800">
+              <div className="text-[10px] font-mono text-emerald-400 mb-2 flex items-center justify-between">
+                <span>STT CONTROL</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              </div>
+              <h3 className="text-white font-bold text-sm mb-1">
+                Toggle Voice Capture
+              </h3>
+              <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                Turns Whisper voice listening ON or OFF.
+              </p>
+              <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs font-semibold">
+                Ctrl + Shift + v
+              </kbd>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800">
+              <div className="text-[10px] font-mono text-cyan-400 mb-2 flex items-center justify-between">
                 <span>STEALTH MODE</span>
                 <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
               </div>
-              <h3 className="text-white font-bold text-base mb-2">
+              <h3 className="text-white font-bold text-sm mb-1">
                 Hide / Show Overlay
               </h3>
-              <p className="text-slate-400 text-xs leading-relaxed mb-4">
-                Toggles teleprompter overlay window visibility.
+              <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                Toggles teleprompter window visibility.
               </p>
-              <kbd className="inline-block px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-cyan-400 font-mono text-xs font-semibold">
+              <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-cyan-400 font-mono text-xs font-semibold">
                 Ctrl + Shift + H
               </kbd>
             </div>
 
-            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-              <div className="text-xs font-mono text-rose-400 mb-3 flex items-center justify-between">
-                <span>EMERGENCY STOP</span>
+            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800">
+              <div className="text-[10px] font-mono text-rose-400 mb-2 flex items-center justify-between">
+                <span>STOP STREAM</span>
                 <span className="w-2 h-2 rounded-full bg-rose-400"></span>
               </div>
-              <h3 className="text-white font-bold text-base mb-2">
+              <h3 className="text-white font-bold text-sm mb-1">
                 Abort Stream
               </h3>
-              <p className="text-slate-400 text-xs leading-relaxed mb-4">
-                Immediately terminates ongoing AI response generation.
+              <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                Terminates ongoing AI answer generation.
               </p>
-              <kbd className="inline-block px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-rose-400 font-mono text-xs font-semibold">
+              <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-rose-400 font-mono text-xs font-semibold">
                 Ctrl + Alt + S / Esc
               </kbd>
             </div>
 
-            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800">
-              <div className="text-xs font-mono text-indigo-400 mb-3 flex items-center justify-between">
+            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800">
+              <div className="text-[10px] font-mono text-indigo-400 mb-2 flex items-center justify-between">
                 <span>SCREEN CLEAR</span>
                 <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
               </div>
-              <h3 className="text-white font-bold text-base mb-2">
+              <h3 className="text-white font-bold text-sm mb-1">
                 Clear Screen
               </h3>
-              <p className="text-slate-400 text-xs leading-relaxed mb-4">
-                Wipes accumulated response content from teleprompter.
+              <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                Wipes content from teleprompter.
               </p>
-              <kbd className="inline-block px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-indigo-400 font-mono text-xs font-semibold">
+              <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-indigo-400 font-mono text-xs font-semibold">
                 Ctrl + Shift + X
               </kbd>
             </div>
@@ -497,8 +618,8 @@ export default function Home() {
               <span className="text-sm font-normal text-slate-400">/ Free</span>
             </div>
             <p className="text-slate-300 text-sm mb-6">
-              Full desktop application access with local session logging and
-              stealth overlay support.
+              Full desktop application access with Voice STT, Auto Screen OCR,
+              local session logging, and stealth overlay support.
             </p>
             <a
               href={DOWNLOAD_URL}

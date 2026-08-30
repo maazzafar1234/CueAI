@@ -1,11 +1,12 @@
 {
   "name": "cue-desktop",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Undetectable Real-Time AI Teleprompter Desktop Application",
   "main": "main.js",
   "type": "module",
   "scripts": {
     "start": "electron .",
+    "electron": "electron .",
     "build:win": "electron-builder --win"
   },
   "dependencies": {
@@ -16,6 +17,8 @@
     "node-microphone": "^0.2.0",
     "node-record-lpcm16": "^1.0.1",
     "openai": "^7.5.0",
+    "screenshot-desktop": "^1.15.0",
+    "tesseract.js": "^5.1.0",
     "wavefile": "^11.0.0",
     "ws": "^8.18.0"
   },
@@ -60,7 +63,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "artifactName": "CueAI-Teleprompter.exe"
+      "artifactName": "CueAI-Teleprompter-v2.0.0.exe"
     }
   }
 }
