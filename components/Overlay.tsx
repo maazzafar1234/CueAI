@@ -14,6 +14,7 @@ import {
   X,
   Camera,
   MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
 
 interface AnswerData {
@@ -24,7 +25,6 @@ interface AnswerData {
 }
 
 export default function Overlay() {
-  // Separate states for mode isolation
   const [screenData, setScreenData] = useState<AnswerData | null>(null);
   const [voiceData, setVoiceData] = useState<AnswerData | null>(null);
 
@@ -33,6 +33,9 @@ export default function Overlay() {
   const [manualQuestion, setManualQuestion] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [modeMismatchWarning, setModeMismatchWarning] = useState<string | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] = useState<"screen" | "voice-manual">(
     "screen",
@@ -43,8 +46,11 @@ export default function Overlay() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Keep refs synchronized instantly on every render
+  activeTabRef.current = activeTab;
+  isListeningRef.current = isListening;
+
   useEffect(() => {
-    activeTabRef.current = activeTab;
     if (
       typeof window !== "undefined" &&
       window.electronAPI &&
@@ -54,12 +60,12 @@ export default function Overlay() {
     }
   }, [activeTab]);
 
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
-
   const handleTabSwitch = (tab: "screen" | "voice-manual") => {
     setActiveTab(tab);
+    setModeMismatchWarning(null);
+    setScreenData(null);
+    setVoiceData(null);
+
     if (tab === "voice-manual") {
       setStatus("Voice Mode Ready");
     } else {
@@ -68,27 +74,39 @@ export default function Overlay() {
     }
   };
 
-  // Active dataset depends on the current tab
   const currentData = activeTab === "screen" ? screenData : voiceData;
   const setCurrentData = activeTab === "screen" ? setScreenData : setVoiceData;
 
-  // 🎙️ Single-Shot Voice Capture Logic
+  // 🎙️ Reliable System Audio Capture (Interviewer Voice Loopback)
   useEffect(() => {
     let stream: MediaStream | null = null;
 
-    const startSingleListen = async () => {
+    const startSystemAudioListen = async () => {
       try {
-        setStatus("Listening for question...");
+        setStatus("Listening for interviewer...");
 
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await (navigator.mediaDevices as any).getUserMedia({
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            sampleRate: 16000,
+            mandatory: {
+              chromeMediaSource: "desktop",
+            },
+          },
+          video: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              maxWidth: 1,
+              maxHeight: 1,
+            },
           },
         });
 
-        const mediaRecorder = new MediaRecorder(stream, {
+        const audioTrack = stream.getAudioTracks()[0];
+        if (!audioTrack) {
+          throw new Error("No system audio track found.");
+        }
+        const audioStream = new MediaStream([audioTrack]);
+
+        const mediaRecorder = new MediaRecorder(audioStream, {
           mimeType: "audio/webm",
         });
         mediaRecorderRef.current = mediaRecorder;
@@ -117,22 +135,25 @@ export default function Overlay() {
           audioChunksRef.current = [];
 
           setLoading(true);
-          setStatus("Processing Question...");
+          setStatus("Processing Interviewer Question...");
 
           try {
             const formData = new FormData();
             formData.append("file", audioBlob, "audio.webm");
 
-            const response = await fetch("/api/voice-solve", {
-              method: "POST",
-              body: formData,
-            });
+            const response = await fetch(
+              "http://localhost:3000/api/voice-solve",
+              {
+                method: "POST",
+                body: formData,
+              },
+            );
 
             const result = await response.json();
             if (result.error) {
               setVoiceData({
                 success: false,
-                rawText: "Voice Input",
+                rawText: "Interviewer Voice",
                 answer: result.error,
               });
             } else {
@@ -141,7 +162,7 @@ export default function Overlay() {
           } catch (err: any) {
             setVoiceData({
               success: false,
-              rawText: "Voice Input",
+              rawText: "Interviewer Voice",
               answer: err.message,
             });
           } finally {
@@ -160,16 +181,16 @@ export default function Overlay() {
           ) {
             mediaRecorderRef.current.stop();
           }
-        }, 5000);
+        }, 6000);
       } catch (err) {
-        console.error("Microphone capture failed:", err);
-        setStatus("Mic Permission Denied");
+        console.error("System audio capture failed:", err);
+        setStatus("Audio Permission Error");
         setIsListening(false);
       }
     };
 
     if (isListening) {
-      startSingleListen();
+      startSystemAudioListen();
     } else {
       if (
         mediaRecorderRef.current &&
@@ -189,72 +210,103 @@ export default function Overlay() {
     };
   }, [isListening]);
 
-  // ⌨️ Keyboard Shortcut for Ctrl + Shift + V
+  // 🔌 Bulletproof Dual Listener (Native DOM Keydown + Electron IPC)
   useEffect(() => {
+    // Handle F9 natively in browser window to bypass dead IPC routing states
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyV") {
+      if (e.key === "F9") {
         e.preventDefault();
-        setActiveTab("voice-manual");
+        if (activeTabRef.current === "screen") {
+          setModeMismatchWarning(
+            "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
+          );
+          setStatus("Mode Mismatch");
+          return;
+        }
+        setModeMismatchWarning(null);
         setIsListening((prev) => !prev);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.electronAPI) return;
+    if (typeof window === "undefined" || !window.electronAPI) {
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
 
-    window.electronAPI.onScreenAnswer((result: AnswerData) => {
-      if (activeTabRef.current !== "screen") {
+    const cleanupToggle = window.electronAPI.onTriggerHotkeySttToggle?.(() => {
+      if (activeTabRef.current === "screen") {
+        setModeMismatchWarning(
+          "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
+        );
+        setStatus("Mode Mismatch");
         return;
       }
-      setScreenData(result);
-      setLoading(false);
-      setStatus("Answer Ready");
+      setModeMismatchWarning(null);
+      setIsListening((prev) => !prev);
     });
 
-    window.electronAPI.onAIStart?.(() => {
-      setLoading(true);
-      setStatus("Thinking...");
-    });
+    const cleanupAnswer = window.electronAPI.onScreenAnswer(
+      (result: AnswerData) => {
+        if (activeTabRef.current !== "screen") return;
 
-    window.electronAPI.onAIStreamChunk?.((chunk: string) => {
-      setCurrentData((prev) => ({
-        success: true,
-        rawText: prev?.rawText || "Query",
-        answer: (prev?.answer || "") + chunk,
-      }));
-    });
+        if (!result.success && result.rawText === "Action Blocked") {
+          setModeMismatchWarning(result.answer);
+          setStatus("Mode Mismatch");
+          setLoading(false);
+          return;
+        }
 
-    window.electronAPI.onAIEnd?.(() => {
-      setLoading(false);
-      setStatus("Ready");
-    });
-
-    window.electronAPI.onStatusUpdate((newStatus: string) => {
-      if (
-        activeTabRef.current !== "screen" &&
-        (newStatus.includes("Capturing") || newStatus.includes("OCR"))
-      ) {
-        return;
-      }
-      if (newStatus.includes("Capturing") || newStatus.includes("Thinking")) {
-        setLoading(true);
-        setStatus(newStatus);
-      } else if (!newStatus.includes("Voice")) {
+        setModeMismatchWarning(null);
+        setScreenData(result);
         setLoading(false);
-        setStatus(newStatus);
-      }
-    });
+        setStatus("Answer Ready");
+      },
+    );
 
-    window.electronAPI.onClearCue(() => {
+    const cleanupStatus = window.electronAPI.onStatusUpdate(
+      (newStatus: string) => {
+        if (newStatus === "Mode Mismatch") {
+          setModeMismatchWarning(
+            activeTabRef.current === "voice-manual"
+              ? "⚠️ You are in Voice & Manual Ask mode. Switch to Screen OCR mode to use this feature."
+              : "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
+          );
+          setStatus("Mode Mismatch");
+          setLoading(false);
+          return;
+        }
+        if (
+          activeTabRef.current !== "screen" &&
+          (newStatus.includes("Capturing") || newStatus.includes("OCR"))
+        ) {
+          return;
+        }
+        if (newStatus.includes("Capturing") || newStatus.includes("Thinking")) {
+          setLoading(true);
+          setStatus(newStatus);
+        } else if (!newStatus.includes("Voice")) {
+          setLoading(false);
+          setStatus(newStatus);
+        }
+      },
+    );
+
+    const cleanupClear = window.electronAPI.onClearCue(() => {
       setScreenData(null);
       setVoiceData(null);
       setLoading(false);
       setStatus("Ready");
+      setModeMismatchWarning(null);
     });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      cleanupToggle?.();
+      cleanupAnswer?.();
+      cleanupStatus?.();
+      cleanupClear?.();
+    };
   }, []);
 
   const handleAskManual = async (e: React.FormEvent) => {
@@ -265,7 +317,7 @@ export default function Overlay() {
     setStatus("Thinking...");
 
     try {
-      const response = await fetch("/api/solve-screen", {
+      const response = await fetch("http://localhost:3000/api/solve-screen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ capturedText: manualQuestion }),
@@ -379,6 +431,17 @@ export default function Overlay() {
         </div>
       </div>
 
+      {/* MODE MISMATCH WARNING BANNER */}
+      {modeMismatchWarning && (
+        <div
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          className="flex items-center gap-2 bg-amber-950/40 border border-amber-500/40 text-amber-300 px-3 py-2 rounded-lg mb-1 text-xs font-mono"
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>{modeMismatchWarning}</span>
+        </div>
+      )}
+
       {/* STATUS BANNER */}
       {activeTab === "voice-manual" && (
         <div
@@ -426,26 +489,23 @@ export default function Overlay() {
         {!loading && currentData && (
           <div className="space-y-2 relative">
             <div className="flex items-center justify-between">
-              {currentData.rawText &&
-                currentData.rawText !== "Action Blocked" && (
-                  <div className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-2 py-1 rounded border border-slate-800 truncate max-w-[280px]">
-                    <span className="text-emerald-400 font-bold">Query:</span>{" "}
-                    {currentData.rawText}
-                  </div>
-                )}
-              {currentData.rawText !== "Action Blocked" && (
-                <button
-                  onClick={handleCopyText}
-                  className="ml-auto px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg flex items-center gap-1 transition border border-slate-700 cursor-pointer"
-                >
-                  {copied ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  <span>{copied ? "Copied!" : "Copy Answer"}</span>
-                </button>
+              {currentData.rawText && (
+                <div className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-2 py-1 rounded border border-slate-800 truncate max-w-[280px]">
+                  <span className="text-emerald-400 font-bold">Query:</span>{" "}
+                  {currentData.rawText}
+                </div>
               )}
+              <button
+                onClick={handleCopyText}
+                className="ml-auto px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold rounded-lg flex items-center gap-1 transition border border-slate-700 cursor-pointer"
+              >
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>{copied ? "Copied!" : "Copy Answer"}</span>
+              </button>
             </div>
             <div className="text-xs font-mono text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-900/60 p-3 rounded-lg border border-slate-800 select-text cursor-text [&_pre]:bg-slate-950 [&_pre]:p-2.5 [&_pre]:rounded-md [&_pre]:my-2 [&_pre]:border [&_pre]:border-slate-800 [&_code]:text-emerald-400">
               {currentData.answer}
@@ -463,8 +523,8 @@ export default function Overlay() {
               </p>
             ) : (
               <p className="text-xs">
-                Press <kbd className="text-cyan-400">Ctrl + Shift + V</kbd> or
-                click Start Voice to listen.
+                Press <kbd className="text-cyan-400">F9</kbd> or click Start
+                Voice to listen.
               </p>
             )}
           </div>
@@ -485,9 +545,7 @@ export default function Overlay() {
             OCR
           </div>
           <div>
-            <kbd className="bg-slate-800 text-emerald-400 px-1 rounded">
-              Ctrl + Shift + V
-            </kbd>{" "}
+            <kbd className="bg-slate-800 text-emerald-400 px-1 rounded">F9</kbd>{" "}
             Voice
           </div>
           <div>
