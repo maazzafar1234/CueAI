@@ -75,14 +75,15 @@ export default function Overlay() {
 
   const currentData = activeTab === "screen" ? screenData : voiceData;
 
+  // 🎙️ Reliable System Audio Capture (Interviewer Voice Loopback)
   useEffect(() => {
-    let stream: MediaStream | null = null;
+    let activeStream: MediaStream | null = null;
 
     const startSystemAudioListen = async () => {
       try {
         setStatus("Listening for interviewer...");
 
-        stream = await (navigator.mediaDevices as any).getUserMedia({
+        activeStream = await (navigator.mediaDevices as any).getUserMedia({
           audio: { mandatory: { chromeMediaSource: "desktop" } },
           video: {
             mandatory: {
@@ -93,7 +94,7 @@ export default function Overlay() {
           },
         });
 
-        const audioTrack = stream?.getAudioTracks()[0];
+        const audioTrack = activeStream?.getAudioTracks()[0];
         if (!audioTrack) {
           throw new Error("No system audio track found.");
         }
@@ -112,8 +113,10 @@ export default function Overlay() {
         };
 
         mediaRecorder.onstop = async () => {
-          // SAFEGUARD: TypeScript check resolved with optional chaining (?.)
-          stream?.getTracks().forEach((track) => track.stop());
+          // FIX: Explicitly check if activeStream is not null before accessing tracks
+          if (activeStream) {
+            activeStream.getTracks().forEach((track) => track.stop());
+          }
 
           if (audioChunksRef.current.length === 0) {
             setIsListening(false);
@@ -202,6 +205,7 @@ export default function Overlay() {
     };
   }, [isListening]);
 
+  // 🔌 Bulletproof Dual Listener (Native DOM Keydown + Electron IPC)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F9") {
@@ -292,11 +296,17 @@ export default function Overlay() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      // SAFEGUARD: Cast cleanup callbacks to `any` to prevent 'never' type-checking errors
-      if (typeof cleanupToggle === "function") (cleanupToggle as any)();
-      if (typeof cleanupAnswer === "function") (cleanupAnswer as any)();
-      if (typeof cleanupStatus === "function") (cleanupStatus as any)();
-      if (typeof cleanupClear === "function") (cleanupClear as any)();
+
+      // FIX: Explicitly cast cleanup variables to `any` and use optional execution safely
+      const toggleFn = cleanupToggle as unknown as any;
+      const answerFn = cleanupAnswer as unknown as any;
+      const statusFn = cleanupStatus as unknown as any;
+      const clearFn = cleanupClear as unknown as any;
+
+      if (typeof toggleFn === "function") toggleFn();
+      if (typeof answerFn === "function") answerFn();
+      if (typeof statusFn === "function") statusFn();
+      if (typeof clearFn === "function") clearFn();
     };
   }, []);
 
