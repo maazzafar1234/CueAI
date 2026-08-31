@@ -75,7 +75,6 @@ export default function Overlay() {
   };
 
   const currentData = activeTab === "screen" ? screenData : voiceData;
-  const setCurrentData = activeTab === "screen" ? setScreenData : setVoiceData;
 
   // 🎙️ Reliable System Audio Capture (Interviewer Voice Loopback)
   useEffect(() => {
@@ -120,6 +119,7 @@ export default function Overlay() {
 
         mediaRecorder.onstop = async () => {
           if (stream) {
+            // FIX: Added optional chaining to prevent 'stream is possibly null' error
             stream?.getTracks().forEach((track) => track.stop());
           }
 
@@ -302,18 +302,19 @@ export default function Overlay() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof cleanupToggle === "function")
-        (cleanupToggle as unknown as () => void)();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof cleanupAnswer === "function")
-        (cleanupAnswer as unknown as () => void)();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof cleanupStatus === "function")
-        (cleanupStatus as unknown as () => void)();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof cleanupClear === "function")
-        (cleanupClear as unknown as () => void)();
+      // FIX: Safely invoke cleanup functions using optional call typing safeguards
+      if (typeof cleanupToggle === "function") {
+        (cleanupToggle as unknown as () => void)?.();
+      }
+      if (typeof cleanupAnswer === "function") {
+        (cleanupAnswer as unknown as () => void)?.();
+      }
+      if (typeof cleanupStatus === "function") {
+        (cleanupStatus as unknown as () => void)?.();
+      }
+      if (typeof cleanupClear === "function") {
+        (cleanupClear as unknown as () => void)?.();
+      }
     };
   }, []);
 
