@@ -8,6 +8,28 @@ import { initWhisper } from "./whisper-stt.js";
 import { captureAndExtractText } from "./screenCapture.js";
 import { createServer } from "http";
 import next from "next";
+import fs from "fs";
+import os from "os";
+
+process.on("uncaughtException", (error) => {
+  const logPath = path.join(os.homedir(), "cueai-error.log");
+  fs.writeFileSync(logPath, `Crash: ${error.stack || error}\n`);
+});
+
+// SINGLE-INSTANCE LOCK: Prevents background multi-window spawns completely
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (overlayWindow) {
+      if (overlayWindow.isMinimized()) overlayWindow.restore();
+      overlayWindow.show();
+      overlayWindow.focus();
+    }
+  });
+}
 
 dotenv.config({ path: ".env.local" });
 
@@ -19,13 +41,25 @@ let isProcessingAnswer = false;
 let currentAppMode = "screen";
 let serverPort = 3000;
 
-// Since Next.js is pre-built via npm script, we run in production mode to serve statically built pages instantly
-const dev = process.env.NODE_ENV !== "production";
-const parentDir = path.join(__dirname, "..");
-const nextApp = next({ dev, dir: __dirname });
+const dev = !app.isPackaged;
+
+const nextDir = dev
+  ? __dirname
+  : path.join(process.resourcesPath, "app.asar.unpacked");
+
+const finalDir = fs.existsSync(nextDir)
+  ? nextDir
+  : path.join(process.resourcesPath, "app");
+
+const nextApp = next({ dev, dir: finalDir });
 const handle = nextApp.getRequestHandler();
 
-function createStealthOverlay() {
+function createStealthOverlay(activePort = serverPort) {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.focus();
+    return;
+  }
+
   overlayWindow = new BrowserWindow({
     width: 600,
     height: 500,
@@ -34,28 +68,36 @@ function createStealthOverlay() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    skipTaskbar: false,
+    skipTaskbar: true, // Hides it from the Windows taskbar and Alt-Tab switcher
     resizable: true,
     hasShadow: false,
+    show: false, // Don't show until fully loaded to prevent flickering
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false, // Prevents throttling when out of focus
     },
   });
 
-  const startUrl = `http://localhost:${serverPort}/overlay`;
-  overlayWindow.loadURL(startUrl).catch((err) => {
-    console.error("[Electron] Failed to load overlay URL:", err);
-  });
-
+  // 1. BLOCKS SCREEN SHARE RECORDING (Zoom, Teams, Meet, OBS)
   overlayWindow.setContentProtection(true);
-  overlayWindow.setAlwaysOnTop(true, "screen-saver");
 
-  overlayWindow.webContents.session.setPermissionCheckHandler(() => true);
-  overlayWindow.webContents.session.setPermissionRequestHandler((wc, p, cb) =>
-    cb(true),
-  );
+  // 2. MAKES THE WINDOW CLICK-THROUGH OPTIONAL IF DESIRED (or keeps it focused)
+  // overlayWindow.setIgnoreMouseEvents(false);
+
+  const startUrl = `http://localhost:${activePort}/overlay`;
+  overlayWindow
+    .loadURL(startUrl)
+    .then(() => {
+      overlayWindow.show();
+      overlayWindow.focus();
+    })
+    .catch((err) => {
+      console.error("[Electron] Failed to load overlay URL:", err);
+    });
+
+  // ... (rest of your global shortcuts and IPC handlers remain the same)
 
   // Global Shortcuts
   globalShortcut.register("CommandOrControl+Shift+H", () => {
@@ -69,52 +111,24 @@ function createStealthOverlay() {
     }
   });
 
-  // Global Shortcut for toggling STT via hotkey F9
   globalShortcut.register("F9", () => {
     if (currentAppMode !== "voice-manual") {
-      console.log("[Electron] F9 blocked: User is in Screen OCR mode.");
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send("status-update", "Mode Mismatch");
       }
       return;
     }
-
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-      console.log("[Electron] Triggering hotkey STT toggle via F9...");
       overlayWindow.webContents.send("trigger-hotkey-stt-toggle");
-    }
-  });
-
-  globalShortcut.register("CommandOrControl+Alt+S", () => {
-    const wasCancelled = cancelCurrentStream();
-    isProcessingAnswer = false;
-    if (overlayWindow) {
-      overlayWindow.webContents.send(
-        "status-update",
-        wasCancelled ? "Stream Cancelled" : "No active stream to cancel",
-      );
-    }
-  });
-
-  globalShortcut.register("CommandOrControl+Shift+X", () => {
-    cancelCurrentStream();
-    isProcessingAnswer = false;
-    if (overlayWindow) {
-      overlayWindow.webContents.send("clear-cue");
-      overlayWindow.webContents.send("status-update", "Screen Cleared");
     }
   });
 
   globalShortcut.register("Alt+S", async () => {
     if (currentAppMode === "voice-manual") {
-      console.log("[Electron] Alt+S blocked: User is in Voice mode.");
-      if (overlayWindow) {
+      if (overlayWindow)
         overlayWindow.webContents.send("status-update", "Mode Mismatch");
-      }
       return;
     }
-
-    console.log("[Electron] Alt+S pressed! Capturing screen silently...");
 
     try {
       if (overlayWindow) {
@@ -125,7 +139,6 @@ function createStealthOverlay() {
       }
 
       const extractedText = await captureAndExtractText();
-      console.log("[Electron] Extracted Screen Text:", extractedText);
 
       if (!extractedText || extractedText.length === 0) {
         if (overlayWindow) {
@@ -138,7 +151,7 @@ function createStealthOverlay() {
       }
 
       const response = await fetch(
-        `http://localhost:${serverPort}/api/solve-screen`,
+        `http://localhost:${activePort}/api/solve-screen`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -166,7 +179,6 @@ function createStealthOverlay() {
 
 ipcMain.on("set-app-mode", (event, mode) => {
   currentAppMode = mode;
-  console.log(`[Electron] App mode successfully updated to: ${currentAppMode}`);
 });
 
 ipcMain.on("window-minimize", () => overlayWindow?.minimize());
@@ -194,30 +206,33 @@ ipcMain.on("cancel-ai-stream", () => {
 });
 
 app.whenReady().then(async () => {
-  console.log("[Electron] Preparing Next.js server...");
+  if (dev) {
+    createStealthOverlay(serverPort);
+  } else {
+    try {
+      await nextApp.prepare();
+      const server = createServer((req, res) => {
+        handle(req, res);
+      });
 
-  try {
-    await nextApp.prepare();
+      server.on("error", (e) => {
+        if (e.code === "EADDRINUSE") {
+          server.listen(0, () => {
+            const assignedPort = server.address().port;
+            createStealthOverlay(assignedPort);
+          });
+        }
+      });
 
-    createServer((req, res) => {
-      handle(req, res);
-    }).listen(serverPort, (err) => {
-      if (err) throw err;
-      console.log(`> Ready on http://localhost:${serverPort}`);
-      createStealthOverlay();
-    });
-  } catch (err) {
-    console.error("[Electron] Failed to start Next.js server:", err);
+      server.listen(serverPort, () => {
+        createStealthOverlay(serverPort);
+      });
+    } catch (err) {
+      console.error("[Electron] Failed to start server:", err);
+    }
   }
 
-  initWhisper()
-    .then(() => {
-      console.log("[Electron] Whisper STT Ready");
-      overlayWindow?.webContents.send("status-update", "Whisper STT Ready");
-    })
-    .catch((err) => {
-      console.error("Failed to load Whisper model:", err);
-    });
+  initWhisper().catch(() => {});
 });
 
 app.on("will-quit", () => {

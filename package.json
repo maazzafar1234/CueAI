@@ -1,15 +1,56 @@
 {
   "name": "real-time-ai-assistant",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "main": "main.js",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "electron": "electron ."
+    "electron": "electron .",
+    "electron:build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.cueai.teleprompter",
+    "productName": "CueAI Teleprompter",
+    "directories": {
+      "output": "release-builds"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "ai-engine.js",
+      "whisper-stt.js",
+      "screenCapture.js",
+      "resume-context.js",
+      ".next/**/*",
+      "public/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      ".next/**/*",
+      "node_modules/screenshot-desktop/**/*",
+      "node_modules/tesseract.js/**/*",
+      "node_modules/tesseract.js-core/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    }
   },
   "dependencies": {
     "@google/genai": "latest",

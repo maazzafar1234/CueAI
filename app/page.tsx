@@ -539,7 +539,7 @@ export default function Home() {
                 Turns Whisper voice listening ON or OFF.
               </p>
               <kbd className="inline-block px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs font-semibold">
-                Ctrl + Shift + v
+                f9
               </kbd>
             </div>
 

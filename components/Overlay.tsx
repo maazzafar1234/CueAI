@@ -100,7 +100,7 @@ export default function Overlay() {
           },
         });
 
-        const audioTrack = stream.getAudioTracks()[0];
+        const audioTrack = stream?.getAudioTracks()[0];
         if (!audioTrack) {
           throw new Error("No system audio track found.");
         }
@@ -120,7 +120,7 @@ export default function Overlay() {
 
         mediaRecorder.onstop = async () => {
           if (stream) {
-            stream.getTracks().forEach((track) => track.stop());
+            stream?.getTracks().forEach((track) => track.stop());
           }
 
           if (audioChunksRef.current.length === 0) {
@@ -302,10 +302,18 @@ export default function Overlay() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      cleanupToggle?.();
-      cleanupAnswer?.();
-      cleanupStatus?.();
-      cleanupClear?.();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof cleanupToggle === "function")
+        (cleanupToggle as unknown as () => void)();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof cleanupAnswer === "function")
+        (cleanupAnswer as unknown as () => void)();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof cleanupStatus === "function")
+        (cleanupStatus as unknown as () => void)();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (typeof cleanupClear === "function")
+        (cleanupClear as unknown as () => void)();
     };
   }, []);
 
@@ -377,19 +385,19 @@ export default function Overlay() {
 
           <div className="flex items-center gap-1 pl-1 border-l border-slate-800">
             <button
-              onClick={() => window.electronAPI?.minimizeWindow()}
+              onClick={() => window.electronAPI?.minimizeWindow?.()}
               className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
             >
               <Minus className="w-3 h-3" />
             </button>
             <button
-              onClick={() => window.electronAPI?.maximizeWindow()}
+              onClick={() => window.electronAPI?.maximizeWindow?.()}
               className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
             >
               <Square className="w-3 h-3" />
             </button>
             <button
-              onClick={() => window.electronAPI?.closeWindow()}
+              onClick={() => window.electronAPI?.closeWindow?.()}
               className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400"
             >
               <X className="w-3 h-3" />
