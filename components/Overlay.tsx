@@ -53,7 +53,7 @@ export default function Overlay() {
     if (
       typeof window !== "undefined" &&
       window.electronAPI &&
-      (window.electronAPI as { setAppMode?: (mode: string) => void }).setAppMode
+      (window.electronAPI as Record<string, unknown>).setAppMode
     ) {
       (window.electronAPI as { setAppMode: (mode: string) => void }).setAppMode(
         activeTab,
@@ -123,11 +123,8 @@ export default function Overlay() {
         };
 
         mediaRecorder.onstop = async () => {
-          // Explicitly assign to a local constant to satisfy TypeScript's strict null analysis
-          const streamToStop = activeStream;
-          if (streamToStop) {
-            streamToStop.getTracks().forEach((track) => track.stop());
-          }
+          // FIX: Fully safe optional chaining to resolve TS18047 null error completely
+          activeStream?.getTracks().forEach((track) => track.stop());
 
           if (audioChunksRef.current.length === 0) {
             setIsListening(false);
@@ -310,16 +307,19 @@ export default function Overlay() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
 
-      // Explicitly type cleanup references using wrapper type assertions to bypass TS2349 never call checks safely
-      const toggle = cleanupToggle as unknown as (() => void) | undefined;
-      const answer = cleanupAnswer as unknown as (() => void) | undefined;
-      const statusUpdate = cleanupStatus as unknown as (() => void) | undefined;
-      const clear = cleanupClear as unknown as (() => void) | undefined;
-
-      if (typeof toggle === "function") toggle();
-      if (typeof answer === "function") answer();
-      if (typeof statusUpdate === "function") statusUpdate();
-      if (typeof clear === "function") clear();
+      // FIX: Resolve TS2349 never call error completely using safe execution checks
+      if (cleanupToggle && typeof cleanupToggle === "function") {
+        (cleanupToggle as unknown as () => void)();
+      }
+      if (cleanupAnswer && typeof cleanupAnswer === "function") {
+        (cleanupAnswer as unknown as () => void)();
+      }
+      if (cleanupStatus && typeof cleanupStatus === "function") {
+        (cleanupStatus as unknown as () => void)();
+      }
+      if (cleanupClear && typeof cleanupClear === "function") {
+        (cleanupClear as unknown as () => void)();
+      }
     };
   }, []);
 
