@@ -46,7 +46,6 @@ export default function Overlay() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Keep refs synchronized instantly on every render
   activeTabRef.current = activeTab;
   isListeningRef.current = isListening;
 
@@ -76,7 +75,6 @@ export default function Overlay() {
 
   const currentData = activeTab === "screen" ? screenData : voiceData;
 
-  // 🎙️ Reliable System Audio Capture (Interviewer Voice Loopback)
   useEffect(() => {
     let stream: MediaStream | null = null;
 
@@ -85,11 +83,7 @@ export default function Overlay() {
         setStatus("Listening for interviewer...");
 
         stream = await (navigator.mediaDevices as any).getUserMedia({
-          audio: {
-            mandatory: {
-              chromeMediaSource: "desktop",
-            },
-          },
+          audio: { mandatory: { chromeMediaSource: "desktop" } },
           video: {
             mandatory: {
               chromeMediaSource: "desktop",
@@ -118,10 +112,8 @@ export default function Overlay() {
         };
 
         mediaRecorder.onstop = async () => {
-          if (stream) {
-            // FIX: Added optional chaining to prevent 'stream is possibly null' error
-            stream?.getTracks().forEach((track) => track.stop());
-          }
+          // SAFEGUARD: TypeScript check resolved with optional chaining (?.)
+          stream?.getTracks().forEach((track) => track.stop());
 
           if (audioChunksRef.current.length === 0) {
             setIsListening(false);
@@ -210,9 +202,7 @@ export default function Overlay() {
     };
   }, [isListening]);
 
-  // 🔌 Bulletproof Dual Listener (Native DOM Keydown + Electron IPC)
   useEffect(() => {
-    // Handle F9 natively in browser window to bypass dead IPC routing states
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F9") {
         e.preventDefault();
@@ -302,19 +292,11 @@ export default function Overlay() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      // FIX: Safely invoke cleanup functions using optional call typing safeguards
-      if (typeof cleanupToggle === "function") {
-        (cleanupToggle as unknown as () => void)?.();
-      }
-      if (typeof cleanupAnswer === "function") {
-        (cleanupAnswer as unknown as () => void)?.();
-      }
-      if (typeof cleanupStatus === "function") {
-        (cleanupStatus as unknown as () => void)?.();
-      }
-      if (typeof cleanupClear === "function") {
-        (cleanupClear as unknown as () => void)?.();
-      }
+      // SAFEGUARD: Cast cleanup callbacks to `any` to prevent 'never' type-checking errors
+      if (typeof cleanupToggle === "function") (cleanupToggle as any)();
+      if (typeof cleanupAnswer === "function") (cleanupAnswer as any)();
+      if (typeof cleanupStatus === "function") (cleanupStatus as any)();
+      if (typeof cleanupClear === "function") (cleanupClear as any)();
     };
   }, []);
 
