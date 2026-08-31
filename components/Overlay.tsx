@@ -297,11 +297,11 @@ export default function Overlay() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
 
-      // FIX: Explicitly cast cleanup variables to `any` and use optional execution safely
-      const toggleFn = cleanupToggle as unknown as any;
-      const answerFn = cleanupAnswer as unknown as any;
-      const statusFn = cleanupStatus as unknown as any;
-      const clearFn = cleanupClear as unknown as any;
+      // Cleanly type-cast as executable functions or undefined
+      const toggleFn = cleanupToggle as unknown as (() => void) | undefined;
+      const answerFn = cleanupAnswer as unknown as (() => void) | undefined;
+      const statusFn = cleanupStatus as unknown as (() => void) | undefined;
+      const clearFn = cleanupClear as unknown as (() => void) | undefined;
 
       if (typeof toggleFn === "function") toggleFn();
       if (typeof answerFn === "function") answerFn();
