@@ -8,7 +8,7 @@
     "dev": "next dev --webpack",
     "build": "next build --no-lint",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "next lint",
     "electron": "electron .",
     "electron:build": "electron-builder"
   },
