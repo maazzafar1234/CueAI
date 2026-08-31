@@ -53,9 +53,11 @@ export default function Overlay() {
     if (
       typeof window !== "undefined" &&
       window.electronAPI &&
-      (window.electronAPI as any).setAppMode
+      (window.electronAPI as { setAppMode?: (mode: string) => void }).setAppMode
     ) {
-      (window.electronAPI as any).setAppMode(activeTab);
+      (window.electronAPI as { setAppMode: (mode: string) => void }).setAppMode(
+        activeTab,
+      );
     }
   }, [activeTab]);
 
@@ -83,15 +85,23 @@ export default function Overlay() {
       try {
         setStatus("Listening for interviewer...");
 
-        activeStream = await (navigator.mediaDevices as any).getUserMedia({
-          audio: { mandatory: { chromeMediaSource: "desktop" } },
+        activeStream = await (
+          navigator.mediaDevices as unknown as {
+            getUserMedia: (
+              constraints: MediaStreamConstraints,
+            ) => Promise<MediaStream>;
+          }
+        ).getUserMedia({
+          audio: {
+            mandatory: { chromeMediaSource: "desktop" },
+          } as unknown as MediaTrackConstraints,
           video: {
             mandatory: {
               chromeMediaSource: "desktop",
               maxWidth: 1,
               maxHeight: 1,
             },
-          },
+          } as unknown as MediaTrackConstraints,
         });
 
         const audioTrack = activeStream?.getAudioTracks()[0];
@@ -113,9 +123,10 @@ export default function Overlay() {
         };
 
         mediaRecorder.onstop = async () => {
-          // FIX: Explicitly check if activeStream is not null before accessing tracks
-          if (activeStream) {
-            activeStream.getTracks().forEach((track) => track.stop());
+          // Explicitly assign to a local constant to satisfy TypeScript's strict null analysis
+          const streamToStop = activeStream;
+          if (streamToStop) {
+            streamToStop.getTracks().forEach((track) => track.stop());
           }
 
           if (audioChunksRef.current.length === 0) {
@@ -154,11 +165,13 @@ export default function Overlay() {
             } else {
               setVoiceData(result);
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
+            const errorMessage =
+              err instanceof Error ? err.message : String(err);
             setVoiceData({
               success: false,
               rawText: "Interviewer Voice",
-              answer: err.message,
+              answer: errorMessage,
             });
           } finally {
             setLoading(false);
@@ -297,16 +310,16 @@ export default function Overlay() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
 
-      // Cleanly type-cast as executable functions or undefined
-      const toggleFn = cleanupToggle as unknown as (() => void) | undefined;
-      const answerFn = cleanupAnswer as unknown as (() => void) | undefined;
-      const statusFn = cleanupStatus as unknown as (() => void) | undefined;
-      const clearFn = cleanupClear as unknown as (() => void) | undefined;
+      // Explicitly type cleanup references using wrapper type assertions to bypass TS2349 never call checks safely
+      const toggle = cleanupToggle as unknown as (() => void) | undefined;
+      const answer = cleanupAnswer as unknown as (() => void) | undefined;
+      const statusUpdate = cleanupStatus as unknown as (() => void) | undefined;
+      const clear = cleanupClear as unknown as (() => void) | undefined;
 
-      if (typeof toggleFn === "function") toggleFn();
-      if (typeof answerFn === "function") answerFn();
-      if (typeof statusFn === "function") statusFn();
-      if (typeof clearFn === "function") clearFn();
+      if (typeof toggle === "function") toggle();
+      if (typeof answer === "function") answer();
+      if (typeof statusUpdate === "function") statusUpdate();
+      if (typeof clear === "function") clear();
     };
   }, []);
 
@@ -334,11 +347,12 @@ export default function Overlay() {
       } else {
         setVoiceData(result);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       setVoiceData({
         success: false,
         rawText: manualQuestion,
-        answer: err.message,
+        answer: errorMessage,
       });
     } finally {
       setLoading(false);
