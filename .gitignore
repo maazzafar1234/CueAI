@@ -22,3 +22,5 @@ interview-session-log.md
 Thumbs.db
 .vscode/
 public/downloads/*.exe
+
+release-builds/

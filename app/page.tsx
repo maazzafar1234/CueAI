@@ -1,7 +1,6 @@
 "use client";
 
 import Navbar from "@/components/Navbar";
-import Overlay from "@/components/Overlay";
 import { useState } from "react";
 import { motion, Variants } from "framer-motion";
 import {
@@ -19,7 +18,7 @@ import {
 } from "lucide-react";
 
 const DOWNLOAD_URL =
-  "https://github.com/maazzafar1234/CueAI/releases/download/v2.0.0/CueAI-Teleprompter-v2.0.0.exe";
+  "https://github.com/maazzafar1234/CueAI/releases/download/v2.0.0/CueAI.Teleprompter.Setup.2.0.0.exe";
 
 // Explicitly type variants using Framer Motion's `Variants` type
 const fadeInUp: Variants = {
@@ -199,7 +198,7 @@ export default function Home() {
                       <span className="text-purple-400">typeof</span>{" "}
                       <span className="text-yellow-300">NaN</span>);{" "}
                       <span className="text-slate-500">
-                        // Output: "number"
+                        {/* Output: "number" */}
                       </span>
                     </code>
                   </pre>
