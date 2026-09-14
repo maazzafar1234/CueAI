@@ -84,6 +84,10 @@ STRICT WRITING RULES:
 - Speak in objective, high-level technical terms ("Node.js enables execution of...", "This architecture allows...", "Developers utilize...").
 - Keep explanations clear, punchy, and structured so they impress an interviewer upon listening.
 
+CRITICAL PROGRAMMING LANGUAGE RULE:
+- For any coding question, identify the exact programming language used in the question text or code snippet (e.g., C++, Java, JavaScript, TypeScript, Rust, Go, Python, etc.).
+- Provide code examples strictly in that identified language. Never default to Python unless Python is explicitly requested or present in the source text.
+
 REQUIRED OUTPUT STRUCTURE:
 
 🗣️ **Interview Answer (What to say):**
@@ -93,8 +97,8 @@ REQUIRED OUTPUT STRUCTURE:
 • 2 clear bullet points detailing the internal mechanics, runtime engine, or underlying flow.
 
 💻 **Quick Code Example:**
-\`\`\`javascript
-// Minimal 3-4 line clean code snippet
+\`\`\`language
+// Minimal clean code snippet matching the detected language context
 \`\`\`
 `;
 
@@ -102,9 +106,12 @@ REQUIRED OUTPUT STRUCTURE:
  * Validates if the captured text represents an actual interview question or problem description.
  */
 function isInterviewQuestion(text) {
-  if (!text || text.trim().length < 6) return false;
+  if (!text || text.trim().length < 2) return false;
 
   const cleanText = text.trim().toLowerCase();
+
+  // Allow short queries or manual inputs to pass through directly
+  if (cleanText.length <= 15) return true;
 
   // 1. Explicit Question Mark
   if (cleanText.endsWith("?")) return true;
@@ -164,6 +171,13 @@ function isInterviewQuestion(text) {
     "maximum",
     "sum",
     "input format",
+    "js",
+    "javascript",
+    "react",
+    "node",
+    "python",
+    "java",
+    "cpp",
   ];
 
   return technicalQuestionKeywords.some((keyword) =>

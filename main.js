@@ -1,5 +1,5 @@
 import pkg from "electron";
-const { app, BrowserWindow, globalShortcut, ipcMain } = pkg;
+const { app, BrowserWindow, globalShortcut, ipcMain, screen } = pkg;
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -11,30 +11,80 @@ import next from "next";
 import fs from "fs";
 import os from "os";
 
-process.on("uncaughtException", (error) => {
-  const logPath = path.join(os.homedir(), "cueai-error.log");
-  fs.writeFileSync(logPath, `Crash: ${error.stack || error}\n`);
+const debugLogPath = path.join(os.homedir(), "Desktop", "cueai-debug.txt");
+fs.writeFileSync(debugLogPath, "--- APP STARTING ---\n");
+
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = (...args) => {
+  fs.appendFileSync(debugLogPath, "[LOG] " + args.join(" ") + "\n");
+  originalLog(...args);
+};
+console.error = (...args) => {
+  fs.appendFileSync(debugLogPath, "[ERR] " + args.join(" ") + "\n");
+  originalError(...args);
+};
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection at:", promise, "reason:", reason);
+  const logPath = path.join(app.getPath("desktop"), "cueai-unhandled.txt");
+  fs.writeFileSync(
+    logPath,
+    `Unhandled Rejection: ${reason?.stack || reason}\n`,
+  );
 });
 
-// SINGLE-INSTANCE LOCK: Prevents background multi-window spawns completely
+process.on("uncaughtException", (error) => {
+  console.error("🔥 FATAL UNCATCHED EXCEPTION:", error);
+  const logPath = path.join(app.getPath("desktop"), "cueai-crash.txt");
+  fs.writeFileSync(logPath, `Crash: ${error?.stack || error}\n`);
+  app.quit();
+});
+
+const envPaths = [
+  process.resourcesPath ? path.join(process.resourcesPath, ".env.local") : null,
+  process.resourcesPath
+    ? path.join(process.resourcesPath, "app", ".env.local")
+    : null,
+  path.join(process.cwd(), ".env.local"),
+  path.join(__dirname, ".env.local"),
+].filter(Boolean);
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    envLoaded = true;
+    break;
+  }
+}
+if (!envLoaded) {
+  dotenv.config({ path: ".env.local" });
+}
+
+app.setPath(
+  "userData",
+  path.join(app.getPath("appData"), "real-time-ai-assistant-dev"),
+);
+
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (overlayWindow) {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
       if (overlayWindow.isMinimized()) overlayWindow.restore();
+      overlayWindow.center();
       overlayWindow.show();
       overlayWindow.focus();
     }
   });
 }
-
-dotenv.config({ path: ".env.local" });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let overlayWindow;
 let isProcessingAnswer = false;
@@ -43,68 +93,90 @@ let serverPort = 3000;
 
 const dev = !app.isPackaged;
 
-const nextDir = dev
-  ? __dirname
-  : path.join(process.resourcesPath, "app.asar.unpacked");
+let nextAppDir = __dirname;
+if (!dev) {
+  const unpackedDir = path.join(process.resourcesPath, "app.asar.unpacked");
+  const standardAppDir = path.join(process.resourcesPath, "app");
 
-const finalDir = fs.existsSync(nextDir)
-  ? nextDir
-  : path.join(process.resourcesPath, "app");
+  if (fs.existsSync(path.join(unpackedDir, ".next"))) {
+    nextAppDir = unpackedDir;
+  } else if (fs.existsSync(path.join(standardAppDir, ".next"))) {
+    nextAppDir = standardAppDir;
+  }
+}
 
-const nextApp = next({ dev, dir: finalDir });
-const handle = nextApp.getRequestHandler();
+const nextApp = dev ? null : next({ dev, dir: nextAppDir });
+const handle = dev ? null : nextApp.getRequestHandler();
 
-function createStealthOverlay(activePort = serverPort) {
+function createTeleprompterWindow(activePort = serverPort) {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.center();
+    overlayWindow.show();
     overlayWindow.focus();
     return;
   }
 
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } =
+    primaryDisplay.workAreaSize;
+
   overlayWindow = new BrowserWindow({
     width: 600,
     height: 500,
-    x: 100,
-    y: 100,
-    frame: false,
-    transparent: true,
+    x: Math.floor((screenWidth - 600) / 2),
+    y: Math.floor((screenHeight - 500) / 2),
+    frame: true,
+    transparent: false,
+    backgroundColor: "#222222",
     alwaysOnTop: true,
-    skipTaskbar: true, // Hides it from the Windows taskbar and Alt-Tab switcher
+    skipTaskbar: false,
     resizable: true,
     hasShadow: false,
-    show: false, // Don't show until fully loaded to prevent flickering
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
-      backgroundThrottling: false, // Prevents throttling when out of focus
+      backgroundThrottling: false,
+      webSecurity: false,
+      allowRunningInsecureContent: true,
     },
   });
 
-  // 1. BLOCKS SCREEN SHARE RECORDING (Zoom, Teams, Meet, OBS)
   overlayWindow.setContentProtection(true);
 
-  // 2. MAKES THE WINDOW CLICK-THROUGH OPTIONAL IF DESIRED (or keeps it focused)
-  // overlayWindow.setIgnoreMouseEvents(false);
+  const startUrl =
+    process.env.ELECTRON_START_URL || `http://127.0.0.1:${activePort}/overlay`;
 
-  const startUrl = `http://localhost:${activePort}/overlay`;
-  overlayWindow
-    .loadURL(startUrl)
-    .then(() => {
-      overlayWindow.show();
-      overlayWindow.focus();
-    })
-    .catch((err) => {
-      console.error("[Electron] Failed to load overlay URL:", err);
-    });
+  console.log(`[Electron] Loading URL: ${startUrl}`);
 
-  // ... (rest of your global shortcuts and IPC handlers remain the same)
+  // Self-healing retry loop properly scoped inside the creation function
+  const loadWithRetry = () => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
-  // Global Shortcuts
+    overlayWindow
+      .loadURL(startUrl)
+      .then(() => {
+        console.log("[Electron] Overlay window loaded successfully!");
+      })
+      .catch(() => {
+        setTimeout(loadWithRetry, 1000);
+      });
+  };
+
+  loadWithRetry();
+
+  overlayWindow.on("closed", () => {
+    overlayWindow = null;
+  });
+
+  // Global shortcuts configuration scoped correctly
   globalShortcut.register("CommandOrControl+Shift+H", () => {
-    if (overlayWindow) {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
       if (overlayWindow.isVisible()) {
         overlayWindow.hide();
       } else {
+        overlayWindow.center();
         overlayWindow.show();
         overlayWindow.focus();
       }
@@ -125,13 +197,13 @@ function createStealthOverlay(activePort = serverPort) {
 
   globalShortcut.register("Alt+S", async () => {
     if (currentAppMode === "voice-manual") {
-      if (overlayWindow)
+      if (overlayWindow && !overlayWindow.isDestroyed())
         overlayWindow.webContents.send("status-update", "Mode Mismatch");
       return;
     }
 
     try {
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send(
           "status-update",
           "Capturing screen & running OCR...",
@@ -141,7 +213,7 @@ function createStealthOverlay(activePort = serverPort) {
       const extractedText = await captureAndExtractText();
 
       if (!extractedText || extractedText.length === 0) {
-        if (overlayWindow) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
           overlayWindow.webContents.send(
             "status-update",
             "No text detected on screen",
@@ -151,7 +223,7 @@ function createStealthOverlay(activePort = serverPort) {
       }
 
       const response = await fetch(
-        `http://localhost:${activePort}/api/solve-screen`,
+        `http://127.0.0.1:${activePort}/api/solve-screen`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -161,13 +233,13 @@ function createStealthOverlay(activePort = serverPort) {
 
       const data = await response.json();
 
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send("screen-answer-ready", data);
         overlayWindow.webContents.send("status-update", "Screen Answer Ready");
       }
     } catch (err) {
       console.error("[Electron] Alt+S capture failed:", err);
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send(
           "status-update",
           "Error capturing screen",
@@ -205,40 +277,58 @@ ipcMain.on("cancel-ai-stream", () => {
   overlayWindow?.webContents.send("status-update", "Stream Cancelled");
 });
 
-app.whenReady().then(async () => {
-  if (dev) {
-    createStealthOverlay(serverPort);
-  } else {
-    try {
-      await nextApp.prepare();
-      const server = createServer((req, res) => {
-        handle(req, res);
-      });
+app.commandLine.appendSwitch("ignore-certificate-errors");
+app.commandLine.appendSwitch("allow-insecure-localhost", "true");
 
-      server.on("error", (e) => {
-        if (e.code === "EADDRINUSE") {
-          server.listen(0, () => {
-            const assignedPort = server.address().port;
-            createStealthOverlay(assignedPort);
-          });
+app
+  .whenReady()
+  .then(async () => {
+    console.log("[Electron-Dev] App is ready, initializing services...");
+
+    try {
+      console.log("[Electron-Dev] Initializing Whisper STT...");
+      await initWhisper();
+      console.log("[Electron-Dev] Whisper STT initialized successfully.");
+    } catch (whisperErr) {
+      console.warn("⚠️ Whisper STT initialization warning:", whisperErr);
+    }
+
+    if (dev) {
+      console.log("[Electron-Dev] Launching teleprompter window...");
+      createTeleprompterWindow(serverPort);
+
+      // 👇 ADD THIS HEARTBEAT INTERVAL TO KEEP TERMINAL/EVENT LOOP ALIVE
+      setInterval(() => {
+        // Keeps the Node event loop active so the process doesn't exit
+      }, 60000);
+    } else {
+      await nextApp.prepare();
+      const server = createServer(async (req, res) => {
+        try {
+          await handle(req, res);
+        } catch (err) {
+          console.error("Next.js request handling error:", err);
         }
       });
 
-      server.listen(serverPort, () => {
-        createStealthOverlay(serverPort);
+      server.listen(serverPort, "127.0.0.1", () => {
+        console.log(
+          `[Electron-Prod] Server running on http://127.0.0.1:${serverPort}`,
+        );
+        createTeleprompterWindow(serverPort);
       });
-    } catch (err) {
-      console.error("[Electron] Failed to start server:", err);
     }
-  }
-
-  initWhisper().catch(() => {});
-});
+  })
+  .catch((err) => {
+    console.error("🔥 Fatal app.whenReady error:", err);
+  });
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });

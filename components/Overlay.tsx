@@ -33,6 +33,7 @@ export default function Overlay() {
   const [manualQuestion, setManualQuestion] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [codeCopiedIndex, setCodeCopiedIndex] = useState<number | null>(null);
   const [modeMismatchWarning, setModeMismatchWarning] = useState<string | null>(
     null,
   );
@@ -49,15 +50,24 @@ export default function Overlay() {
   activeTabRef.current = activeTab;
   isListeningRef.current = isListening;
 
+  // Dynamically resolve API base URL using 127.0.0.1 loopback for bulletproof production compatibility
+  const getApiBaseUrl = () => {
+    if (typeof window !== "undefined") {
+      const host = window.location.host.replace("localhost", "127.0.0.1");
+      return `${window.location.protocol}//${host}`;
+    }
+    return "http://127.0.0.1:3000";
+  };
+
   useEffect(() => {
     if (
       typeof window !== "undefined" &&
       window.electronAPI &&
-      (window.electronAPI as Record<string, unknown>).setAppMode
+      (window.electronAPI as unknown as Record<string, unknown>).setAppMode
     ) {
-      (window.electronAPI as { setAppMode: (mode: string) => void }).setAppMode(
-        activeTab,
-      );
+      (
+        window.electronAPI as unknown as { setAppMode: (mode: string) => void }
+      ).setAppMode(activeTab);
     }
   }, [activeTab]);
 
@@ -123,7 +133,6 @@ export default function Overlay() {
         };
 
         mediaRecorder.onstop = async () => {
-          // FIX: Fully safe optional chaining to resolve TS18047 null error completely
           activeStream?.getTracks().forEach((track) => track.stop());
 
           if (audioChunksRef.current.length === 0) {
@@ -144,24 +153,19 @@ export default function Overlay() {
             const formData = new FormData();
             formData.append("file", audioBlob, "audio.webm");
 
-            const response = await fetch(
-              "http://localhost:3000/api/voice-solve",
-              {
-                method: "POST",
-                body: formData,
-              },
-            );
+            const response = await fetch(`${getApiBaseUrl()}/api/voice-solve`, {
+              method: "POST",
+              body: formData,
+            });
 
             const result = await response.json();
-            if (result.error) {
-              setVoiceData({
-                success: false,
-                rawText: "Interviewer Voice",
-                answer: result.error,
-              });
-            } else {
-              setVoiceData(result);
-            }
+            const formattedData = {
+              success: result.success ?? true,
+              rawText: "Interviewer Voice",
+              answer: result.answer || result.error || "No response generated.",
+            };
+
+            setVoiceData(formattedData);
           } catch (err: unknown) {
             const errorMessage =
               err instanceof Error ? err.message : String(err);
@@ -229,6 +233,15 @@ export default function Overlay() {
         }
         setModeMismatchWarning(null);
         setIsListening((prev) => !prev);
+      }
+
+      if (e.ctrlKey && e.shiftKey && (e.key === "X" || e.key === "x")) {
+        e.preventDefault();
+        setScreenData(null);
+        setVoiceData(null);
+        setLoading(false);
+        setStatus("Ready");
+        setModeMismatchWarning(null);
       }
     };
 
@@ -307,17 +320,16 @@ export default function Overlay() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
 
-      // FIX: Resolve TS2349 never call error completely using safe execution checks
-      if (cleanupToggle && typeof cleanupToggle === "function") {
+      if (typeof cleanupToggle === "function") {
         (cleanupToggle as unknown as () => void)();
       }
-      if (cleanupAnswer && typeof cleanupAnswer === "function") {
+      if (typeof cleanupAnswer === "function") {
         (cleanupAnswer as unknown as () => void)();
       }
-      if (cleanupStatus && typeof cleanupStatus === "function") {
+      if (typeof cleanupStatus === "function") {
         (cleanupStatus as unknown as () => void)();
       }
-      if (cleanupClear && typeof cleanupClear === "function") {
+      if (typeof cleanupClear === "function") {
         (cleanupClear as unknown as () => void)();
       }
     };
@@ -327,37 +339,47 @@ export default function Overlay() {
     e.preventDefault();
     if (!manualQuestion.trim()) return;
 
+    const currentQuery = manualQuestion;
+    setManualQuestion("");
     setLoading(true);
     setStatus("Thinking...");
 
     try {
-      const response = await fetch("http://localhost:3000/api/solve-screen", {
+      const response = await fetch(`${getApiBaseUrl()}/api/solve-screen`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capturedText: manualQuestion }),
+        body: JSON.stringify({ capturedText: currentQuery }),
       });
 
       const result = await response.json();
-      if (result.error) {
-        setVoiceData({
-          success: false,
-          rawText: manualQuestion,
-          answer: result.error,
-        });
+
+      const formattedData = {
+        success: result.success ?? true,
+        rawText: currentQuery,
+        answer: result.answer || result.error || "No response generated.",
+      };
+
+      if (activeTab === "screen") {
+        setScreenData(formattedData);
       } else {
-        setVoiceData(result);
+        setVoiceData(formattedData);
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setVoiceData({
+      const errorData = {
         success: false,
-        rawText: manualQuestion,
-        answer: errorMessage,
-      });
+        rawText: currentQuery,
+        answer: `Connection Error: ${errorMessage}`,
+      };
+
+      if (activeTab === "screen") {
+        setScreenData(errorData);
+      } else {
+        setVoiceData(errorData);
+      }
     } finally {
       setLoading(false);
       setStatus("Answer Ready");
-      setManualQuestion("");
     }
   };
 
@@ -519,11 +541,68 @@ export default function Overlay() {
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
                 )}
-                <span>{copied ? "Copied!" : "Copy Answer"}</span>
+                <span>{copied ? "Copied All!" : "Copy All"}</span>
               </button>
             </div>
-            <div className="text-xs font-mono text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-900/60 p-3 rounded-lg border border-slate-800 select-text cursor-text [&_pre]:bg-slate-950 [&_pre]:p-2.5 [&_pre]:rounded-md [&_pre]:my-2 [&_pre]:border [&_pre]:border-slate-800 [&_code]:text-emerald-400">
-              {currentData.answer}
+
+            <div className="text-xs font-mono text-slate-200 leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-slate-800 select-text cursor-text space-y-3">
+              {currentData.answer
+                .split(/```[\s\S]*?```/)
+                .map((textPart, index) => {
+                  const matchCodeBlock =
+                    currentData.answer.match(/```([\s\S]*?)```/g);
+                  const currentCodeBlock = matchCodeBlock
+                    ? matchCodeBlock[index]
+                    : null;
+                  const rawCodeContent = currentCodeBlock
+                    ? currentCodeBlock
+                        .replace(/```[a-zA-Z]*\n?/g, "")
+                        .replace(/```$/, "")
+                    : null;
+
+                  return (
+                    <div key={index} className="space-y-2">
+                      {textPart.trim() && (
+                        <div className="whitespace-pre-wrap">{textPart}</div>
+                      )}
+
+                      {rawCodeContent && (
+                        <div className="relative bg-slate-950 border border-slate-800 rounded-md p-3 my-2 group">
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-[10px] text-slate-400 font-mono">
+                            <span className="text-emerald-400 font-bold uppercase tracking-wider">
+                              Solution Code
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(rawCodeContent);
+                                setCodeCopiedIndex(index);
+                                setTimeout(
+                                  () => setCodeCopiedIndex(null),
+                                  2000,
+                                );
+                              }}
+                              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                            >
+                              {codeCopiedIndex === index ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                              <span>
+                                {codeCopiedIndex === index
+                                  ? "Copied Code!"
+                                  : "Copy Code"}
+                              </span>
+                            </button>
+                          </div>
+                          <pre className="overflow-x-auto text-emerald-400 whitespace-pre text-[11px] font-mono">
+                            {rawCodeContent}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -565,9 +644,9 @@ export default function Overlay() {
           </div>
           <div>
             <kbd className="bg-slate-800 text-cyan-400 px-1 rounded">
-              Ctrl + Shift + H
+              Ctrl + Shift + X
             </kbd>{" "}
-            Hide
+            Clear
           </div>
         </div>
 
