@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const DOWNLOAD_URL =
   "https://github.com/maazzafar1234/CueAI/releases/download/v2.0.0/CueAI.Teleprompter.Setup.2.0.0.exe";

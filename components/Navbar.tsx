@@ -39,7 +39,7 @@ export default function Navbar() {
 
         {/* CTA Download Button */}
         <a
-          href="/downloads/CueAI-Teleprompter.exe"
+          href="https://github.com/maazzafar1234/CueAI/releases/download/v2.0.0/CueAI.Teleprompter.Setup.2.0.0.exe"
           download="CueAI-Teleprompter.exe"
           className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition flex items-center gap-1.5"
         >
