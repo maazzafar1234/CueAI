@@ -7,43 +7,96 @@ import { generateAnswerCue, cancelCurrentStream } from "./ai-engine.js";
 import { initWhisper } from "./whisper-stt.js";
 import { captureAndExtractText } from "./screenCapture.js";
 import { createServer } from "http";
+import http from "http";
 import next from "next";
 import fs from "fs";
 import os from "os";
+import getPort from "get-port";
 
-const debugLogPath = path.join(os.homedir(), "Desktop", "cueai-debug.txt");
-fs.writeFileSync(debugLogPath, "--- APP STARTING ---\n");
+// 👇 CRITICAL SECURITY FLAGS TO PREVENT LOCALHOST BLOCKS & CRASHES
+app.commandLine.appendSwitch("ignore-certificate-errors");
+app.commandLine.appendSwitch("allow-insecure-localhost", "true");
+app.commandLine.appendSwitch("disable-site-isolation-trials");
+app.commandLine.appendSwitch("web-security", "false");
 
-const originalLog = console.log;
-const originalError = console.error;
+// Ensure app user data path is set correctly before writing logs
+const dataPath = app.getPath ? app.getPath("appData") : os.tmpdir();
+const resolvedUserData = path.join(dataPath, "real-time-ai-assistant");
+try {
+  app.setPath("userData", resolvedUserData);
+} catch (e) {}
 
-console.log = (...args) => {
-  fs.appendFileSync(debugLogPath, "[LOG] " + args.join(" ") + "\n");
-  originalLog(...args);
+// 👇 ROBUST LOGGING PATH: Uses userData folder when installed, project folder during development
+const logDir = app.isPackaged ? app.getPath("userData") : process.cwd();
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+} catch (e) {}
+
+const debugLogPath = path.join(logDir, "cueai-debug.txt");
+
+const logDebug = (msg) => {
+  if (
+    typeof msg === "string" &&
+    (msg.includes("Fast Refresh") ||
+      msg.includes("webpack-internal") ||
+      msg.includes("preloaded using link preload"))
+  ) {
+    return;
+  }
+
+  const formatted = `[${new Date().toISOString()}] ${msg}\n`;
+  try {
+    fs.appendFileSync(debugLogPath, formatted);
+  } catch (e) {
+    console.error("Log error:", e);
+  }
 };
+
+// 👇 UPGRADED CONSOLE ERROR INTERCEPTOR TO CAPTURE REAL ERROR DETAILS
+const originalConsoleError = console.error;
 console.error = (...args) => {
-  fs.appendFileSync(debugLogPath, "[ERR] " + args.join(" ") + "\n");
-  originalError(...args);
+  const errorMsg = args
+    .map((arg) => {
+      if (arg instanceof Error) {
+        return `[Error] ${arg.message}\nStack: ${arg.stack}`;
+      }
+      if (typeof arg === "object" && arg !== null) {
+        try {
+          // If it's a Next.js internal error object with message/err properties
+          return arg.message
+            ? `${arg.message}\n${arg.stack || ""}`
+            : JSON.stringify(arg, null, 2);
+        } catch (e) {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    })
+    .join(" ");
+
+  logDebug(`🔥 [Detailed Server Error]: ${errorMsg}`);
+  originalConsoleError(...args);
 };
+
+try {
+  fs.writeFileSync(debugLogPath, "--- CUEAI APP STARTING ---\n");
+  logDebug(`Log file initialized successfully at: ${debugLogPath}`);
+} catch (e) {
+  console.error("Init log error:", e);
+}
+
+process.on("uncaughtException", (error) => {
+  logDebug(`🔥 FATAL CRASH: ${error?.stack || error}`);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logDebug(`🔥 UNHANDLED REJECTION: ${reason?.stack || reason}`);
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("🔥 Unhandled Rejection at:", promise, "reason:", reason);
-  const logPath = path.join(app.getPath("desktop"), "cueai-unhandled.txt");
-  fs.writeFileSync(
-    logPath,
-    `Unhandled Rejection: ${reason?.stack || reason}\n`,
-  );
-});
-
-process.on("uncaughtException", (error) => {
-  console.error("🔥 FATAL UNCATCHED EXCEPTION:", error);
-  const logPath = path.join(app.getPath("desktop"), "cueai-crash.txt");
-  fs.writeFileSync(logPath, `Crash: ${error?.stack || error}\n`);
-  app.quit();
-});
 
 const envPaths = [
   process.resourcesPath ? path.join(process.resourcesPath, ".env.local") : null,
@@ -66,13 +119,7 @@ if (!envLoaded) {
   dotenv.config({ path: ".env.local" });
 }
 
-app.setPath(
-  "userData",
-  path.join(app.getPath("appData"), "real-time-ai-assistant-dev"),
-);
-
 const gotTheLock = app.requestSingleInstanceLock();
-
 if (!gotTheLock) {
   app.quit();
 } else {
@@ -86,29 +133,30 @@ if (!gotTheLock) {
   });
 }
 
-let overlayWindow;
-let isProcessingAnswer = false;
+let overlayWindow = null;
 let currentAppMode = "screen";
-let serverPort = 3000;
-
 const dev = !app.isPackaged;
 
 let nextAppDir = __dirname;
 if (!dev) {
   const unpackedDir = path.join(process.resourcesPath, "app.asar.unpacked");
   const standardAppDir = path.join(process.resourcesPath, "app");
+  const unpackedNext = path.join(unpackedDir, ".next");
+  const standardNext = path.join(standardAppDir, ".next");
 
-  if (fs.existsSync(path.join(unpackedDir, ".next"))) {
+  if (fs.existsSync(unpackedNext)) {
     nextAppDir = unpackedDir;
-  } else if (fs.existsSync(path.join(standardAppDir, ".next"))) {
+  } else if (fs.existsSync(standardNext)) {
     nextAppDir = standardAppDir;
+  } else {
+    nextAppDir = path.join(process.resourcesPath, "app.asar");
   }
 }
 
-const nextApp = dev ? null : next({ dev, dir: nextAppDir });
+const nextApp = dev ? null : next({ dev: false, dir: nextAppDir });
 const handle = dev ? null : nextApp.getRequestHandler();
 
-function createTeleprompterWindow(activePort = serverPort) {
+function createTeleprompterWindow(activePort) {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.center();
     overlayWindow.show();
@@ -125,8 +173,8 @@ function createTeleprompterWindow(activePort = serverPort) {
     height: 500,
     x: Math.floor((screenWidth - 600) / 2),
     y: Math.floor((screenHeight - 500) / 2),
-    frame: true,
-    transparent: false,
+    frame: false,
+    transparent: true,
     backgroundColor: "#222222",
     alwaysOnTop: true,
     skipTaskbar: false,
@@ -134,43 +182,68 @@ function createTeleprompterWindow(activePort = serverPort) {
     hasShadow: false,
     show: true,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       backgroundThrottling: false,
       webSecurity: false,
       allowRunningInsecureContent: true,
     },
   });
 
+  overlayWindow.webContents.on(
+    "console-message",
+    (event, level, message, line, sourceId) => {
+      logDebug(`[Renderer Console] ${message} (Source: ${sourceId}:${line})`);
+    },
+  );
+
+  overlayWindow.webContents.on(
+    "did-fail-load",
+    (event, errorCode, errorDescription, validatedURL) => {
+      logDebug(
+        `🔥 Did Fail Load: ${errorDescription} (${errorCode}) for URL: ${validatedURL}`,
+      );
+    },
+  );
+
+  overlayWindow.webContents.on("render-process-gone", (event, details) => {
+    logDebug(`🔥 Renderer Process Gone: ${JSON.stringify(details)}`);
+  });
+
   overlayWindow.setContentProtection(true);
 
+  const targetPort = dev ? 3000 : activePort;
   const startUrl =
-    process.env.ELECTRON_START_URL || `http://127.0.0.1:${activePort}/overlay`;
+    process.env.ELECTRON_START_URL || `http://127.0.0.1:${targetPort}/overlay`;
+  logDebug(`Target URL: ${startUrl}`);
 
-  console.log(`[Electron] Loading URL: ${startUrl}`);
-
-  // Self-healing retry loop properly scoped inside the creation function
-  const loadWithRetry = () => {
+  const pollServerAndLoad = () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
-    overlayWindow
-      .loadURL(startUrl)
-      .then(() => {
-        console.log("[Electron] Overlay window loaded successfully!");
+    logDebug("Checking if Next.js server is ready...");
+
+    http
+      .get(startUrl, (res) => {
+        res.resume();
+        logDebug("Server is up and responding! Loading window URL...");
+        overlayWindow.loadURL(startUrl).catch((err) => {
+          logDebug(`Load URL error: ${err}`);
+        });
       })
-      .catch(() => {
-        setTimeout(loadWithRetry, 1000);
+      .on("error", () => {
+        logDebug("Server not ready yet, retrying in 1 second...");
+        setTimeout(pollServerAndLoad, 1000);
       });
   };
 
-  loadWithRetry();
+  pollServerAndLoad();
 
   overlayWindow.on("closed", () => {
     overlayWindow = null;
   });
 
-  // Global shortcuts configuration scoped correctly
   globalShortcut.register("CommandOrControl+Shift+H", () => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       if (overlayWindow.isVisible()) {
@@ -185,45 +258,35 @@ function createTeleprompterWindow(activePort = serverPort) {
 
   globalShortcut.register("F9", () => {
     if (currentAppMode !== "voice-manual") {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send("status-update", "Mode Mismatch");
-      }
+      overlayWindow?.webContents.send("status-update", "Mode Mismatch");
       return;
     }
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.webContents.send("trigger-hotkey-stt-toggle");
-    }
+    overlayWindow?.webContents.send("trigger-hotkey-stt-toggle");
   });
 
   globalShortcut.register("Alt+S", async () => {
     if (currentAppMode === "voice-manual") {
-      if (overlayWindow && !overlayWindow.isDestroyed())
-        overlayWindow.webContents.send("status-update", "Mode Mismatch");
+      overlayWindow?.webContents.send("status-update", "Mode Mismatch");
       return;
     }
 
     try {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send(
-          "status-update",
-          "Capturing screen & running OCR...",
-        );
-      }
-
+      overlayWindow?.webContents.send(
+        "status-update",
+        "Capturing screen & running OCR...",
+      );
       const extractedText = await captureAndExtractText();
 
       if (!extractedText || extractedText.length === 0) {
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send(
-            "status-update",
-            "No text detected on screen",
-          );
-        }
+        overlayWindow?.webContents.send(
+          "status-update",
+          "No text detected on screen",
+        );
         return;
       }
 
       const response = await fetch(
-        `http://127.0.0.1:${activePort}/api/solve-screen`,
+        `http://127.0.0.1:${targetPort}/api/solve-screen`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -232,19 +295,14 @@ function createTeleprompterWindow(activePort = serverPort) {
       );
 
       const data = await response.json();
-
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send("screen-answer-ready", data);
-        overlayWindow.webContents.send("status-update", "Screen Answer Ready");
-      }
+      overlayWindow?.webContents.send("screen-answer-ready", data);
+      overlayWindow?.webContents.send("status-update", "Screen Answer Ready");
     } catch (err) {
-      console.error("[Electron] Alt+S capture failed:", err);
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send(
-          "status-update",
-          "Error capturing screen",
-        );
-      }
+      logDebug(`Alt+S capture failed: ${err}`);
+      overlayWindow?.webContents.send(
+        "status-update",
+        "Error capturing screen",
+      );
     }
   });
 }
@@ -262,72 +320,79 @@ ipcMain.on("window-hide", () => overlayWindow?.hide());
 ipcMain.on("window-close", () => overlayWindow?.close());
 
 ipcMain.on("ask-ai", async (event, questionText) => {
-  isProcessingAnswer = true;
   event.sender.send("ai-start");
   await generateAnswerCue(questionText, (chunk) => {
     event.sender.send("ai-stream-chunk", chunk);
   });
   event.sender.send("ai-end");
-  isProcessingAnswer = false;
 });
 
 ipcMain.on("cancel-ai-stream", () => {
   cancelCurrentStream();
-  isProcessingAnswer = false;
   overlayWindow?.webContents.send("status-update", "Stream Cancelled");
 });
 
-app.commandLine.appendSwitch("ignore-certificate-errors");
-app.commandLine.appendSwitch("allow-insecure-localhost", "true");
+app.whenReady().then(async () => {
+  logDebug("App is ready, initializing services...");
 
-app
-  .whenReady()
-  .then(async () => {
-    console.log("[Electron-Dev] App is ready, initializing services...");
+  try {
+    await initWhisper();
+    logDebug("Whisper STT initialized successfully.");
+  } catch (whisperErr) {
+    logDebug(`⚠️ Whisper STT initialization warning: ${whisperErr}`);
+  }
 
+  const activePort = await getPort({ port: 3000 });
+  logDebug(`Allocated active server port: ${activePort}`);
+
+  if (dev) {
+    logDebug("Running in Development Mode");
+    const heartbeat = setInterval(() => {}, 60000);
+    heartbeat.unref();
+
+    createTeleprompterWindow(activePort);
+  } else {
+    logDebug("Running in Production Mode");
     try {
-      console.log("[Electron-Dev] Initializing Whisper STT...");
-      await initWhisper();
-      console.log("[Electron-Dev] Whisper STT initialized successfully.");
-    } catch (whisperErr) {
-      console.warn("⚠️ Whisper STT initialization warning:", whisperErr);
-    }
+      logDebug(`Next app dir resolved to: ${nextAppDir}`);
 
-    if (dev) {
-      console.log("[Electron-Dev] Launching teleprompter window...");
-      createTeleprompterWindow(serverPort);
-
-      // 👇 ADD THIS HEARTBEAT INTERVAL TO KEEP TERMINAL/EVENT LOOP ALIVE
-      setInterval(() => {
-        // Keeps the Node event loop active so the process doesn't exit
-      }, 60000);
-    } else {
       await nextApp.prepare();
+      logDebug("Next.js prepared successfully.");
+
       const server = createServer(async (req, res) => {
         try {
           await handle(req, res);
         } catch (err) {
-          console.error("Next.js request handling error:", err);
+          logDebug(`🔥 Next.js Request Error: ${err?.stack || err}`);
+          res.statusCode = 500;
+          res.end(`Internal Server Error: ${err.message}`);
         }
       });
 
-      server.listen(serverPort, "127.0.0.1", () => {
-        console.log(
-          `[Electron-Prod] Server running on http://127.0.0.1:${serverPort}`,
+      server.listen(activePort, "127.0.0.1", () => {
+        logDebug(
+          `Production server listening on http://127.0.0.1:${activePort}`,
         );
-        createTeleprompterWindow(serverPort);
+        createTeleprompterWindow(activePort);
       });
+
+      server.on("error", (e) => {
+        logDebug(`🔥 Server level error: ${e.code}`);
+      });
+    } catch (nextErr) {
+      logDebug(
+        `🔥 FATAL Next.js preparation failed: ${nextErr?.stack || nextErr}`,
+      );
     }
-  })
-  .catch((err) => {
-    console.error("🔥 Fatal app.whenReady error:", err);
-  });
+  }
+});
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
+  logDebug("All windows closed. Quitting application.");
   if (process.platform !== "darwin") {
     app.quit();
   }

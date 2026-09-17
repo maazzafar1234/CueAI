@@ -24,6 +24,74 @@ interface AnswerData {
   error?: string;
 }
 
+// Safe wrapper for electronAPI to prevent SSR/undefined crashes
+const safeElectron = {
+  setAppMode: (mode: string) => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.setAppMode
+    ) {
+      (window as any).electronAPI.setAppMode(mode);
+    }
+  },
+  minimizeWindow: () => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.minimizeWindow
+    ) {
+      (window as any).electronAPI.minimizeWindow();
+    }
+  },
+  maximizeWindow: () => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.maximizeWindow
+    ) {
+      (window as any).electronAPI.maximizeWindow();
+    }
+  },
+  closeWindow: () => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.closeWindow
+    ) {
+      (window as any).electronAPI.closeWindow();
+    }
+  },
+  onTriggerHotkeySttToggle: (cb: () => void) => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.onTriggerHotkeySttToggle
+    ) {
+      return (window as any).electronAPI.onTriggerHotkeySttToggle(cb);
+    }
+  },
+  onScreenAnswer: (cb: (data: AnswerData) => void) => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.onScreenAnswer
+    ) {
+      return (window as any).electronAPI.onScreenAnswer(cb);
+    }
+  },
+  onStatusUpdate: (cb: (status: string) => void) => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.onStatusUpdate
+    ) {
+      return (window as any).electronAPI.onStatusUpdate(cb);
+    }
+  },
+  onClearCue: (cb: () => void) => {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).electronAPI?.onClearCue
+    ) {
+      return (window as any).electronAPI.onClearCue(cb);
+    }
+  },
+};
+
 export default function Overlay() {
   const [screenData, setScreenData] = useState<AnswerData | null>(null);
   const [voiceData, setVoiceData] = useState<AnswerData | null>(null);
@@ -50,7 +118,6 @@ export default function Overlay() {
   activeTabRef.current = activeTab;
   isListeningRef.current = isListening;
 
-  // Dynamically resolve API base URL using 127.0.0.1 loopback for bulletproof production compatibility
   const getApiBaseUrl = () => {
     if (typeof window !== "undefined") {
       const host = window.location.host.replace("localhost", "127.0.0.1");
@@ -59,16 +126,24 @@ export default function Overlay() {
     return "http://127.0.0.1:3000";
   };
 
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      window.electronAPI &&
-      (window.electronAPI as unknown as Record<string, unknown>).setAppMode
-    ) {
-      (
-        window.electronAPI as unknown as { setAppMode: (mode: string) => void }
-      ).setAppMode(activeTab);
+  // Helper function to safely parse API responses and prevent JSON syntax crashes
+  const safeParseResponse = async (response: Response) => {
+    const text = await response.text();
+    if (!text || text.trim() === "") {
+      return { success: false, error: "Empty server response received." };
     }
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return {
+        success: false,
+        error: `Invalid server response: ${text.slice(0, 100)}`,
+      };
+    }
+  };
+
+  useEffect(() => {
+    safeElectron.setAppMode(activeTab);
   }, [activeTab]);
 
   const handleTabSwitch = (tab: "screen" | "voice-manual") => {
@@ -87,7 +162,7 @@ export default function Overlay() {
 
   const currentData = activeTab === "screen" ? screenData : voiceData;
 
-  // 🎙️ Reliable System Audio Capture (Interviewer Voice Loopback)
+  // Safe System Audio Capture Hook
   useEffect(() => {
     let activeStream: MediaStream | null = null;
 
@@ -95,23 +170,19 @@ export default function Overlay() {
       try {
         setStatus("Listening for interviewer...");
 
-        activeStream = await (
-          navigator.mediaDevices as unknown as {
-            getUserMedia: (
-              constraints: MediaStreamConstraints,
-            ) => Promise<MediaStream>;
-          }
-        ).getUserMedia({
-          audio: {
-            mandatory: { chromeMediaSource: "desktop" },
-          } as unknown as MediaTrackConstraints,
+        if (!navigator?.mediaDevices?.getUserMedia) {
+          throw new Error("MediaDevices API not supported.");
+        }
+
+        activeStream = await navigator.mediaDevices.getUserMedia({
+          audio: { mandatory: { chromeMediaSource: "desktop" } } as any,
           video: {
             mandatory: {
               chromeMediaSource: "desktop",
               maxWidth: 1,
               maxHeight: 1,
             },
-          } as unknown as MediaTrackConstraints,
+          } as any,
         });
 
         const audioTrack = activeStream?.getAudioTracks()[0];
@@ -158,7 +229,7 @@ export default function Overlay() {
               body: formData,
             });
 
-            const result = await response.json();
+            const result = await safeParseResponse(response);
             const formattedData = {
               success: result.success ?? true,
               rawText: "Interviewer Voice",
@@ -219,7 +290,7 @@ export default function Overlay() {
     };
   }, [isListening]);
 
-  // 🔌 Bulletproof Dual Listener (Native DOM Keydown + Electron IPC)
+  // Safe Event Listeners Binding
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F9") {
@@ -247,11 +318,7 @@ export default function Overlay() {
 
     window.addEventListener("keydown", handleKeyDown);
 
-    if (typeof window === "undefined" || !window.electronAPI) {
-      return () => window.removeEventListener("keydown", handleKeyDown);
-    }
-
-    const cleanupToggle = window.electronAPI.onTriggerHotkeySttToggle?.(() => {
+    const cleanupToggle = safeElectron.onTriggerHotkeySttToggle(() => {
       if (activeTabRef.current === "screen") {
         setModeMismatchWarning(
           "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
@@ -263,53 +330,49 @@ export default function Overlay() {
       setIsListening((prev) => !prev);
     });
 
-    const cleanupAnswer = window.electronAPI.onScreenAnswer(
-      (result: AnswerData) => {
-        if (activeTabRef.current !== "screen") return;
+    const cleanupAnswer = safeElectron.onScreenAnswer((result: AnswerData) => {
+      if (activeTabRef.current !== "screen") return;
 
-        if (!result.success && result.rawText === "Action Blocked") {
-          setModeMismatchWarning(result.answer);
-          setStatus("Mode Mismatch");
-          setLoading(false);
-          return;
-        }
-
-        setModeMismatchWarning(null);
-        setScreenData(result);
+      if (!result.success && result.rawText === "Action Blocked") {
+        setModeMismatchWarning(result.answer);
+        setStatus("Mode Mismatch");
         setLoading(false);
-        setStatus("Answer Ready");
-      },
-    );
+        return;
+      }
 
-    const cleanupStatus = window.electronAPI.onStatusUpdate(
-      (newStatus: string) => {
-        if (newStatus === "Mode Mismatch") {
-          setModeMismatchWarning(
-            activeTabRef.current === "voice-manual"
-              ? "⚠️ You are in Voice & Manual Ask mode. Switch to Screen OCR mode to use this feature."
-              : "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
-          );
-          setStatus("Mode Mismatch");
-          setLoading(false);
-          return;
-        }
-        if (
-          activeTabRef.current !== "screen" &&
-          (newStatus.includes("Capturing") || newStatus.includes("OCR"))
-        ) {
-          return;
-        }
-        if (newStatus.includes("Capturing") || newStatus.includes("Thinking")) {
-          setLoading(true);
-          setStatus(newStatus);
-        } else if (!newStatus.includes("Voice")) {
-          setLoading(false);
-          setStatus(newStatus);
-        }
-      },
-    );
+      setModeMismatchWarning(null);
+      setScreenData(result);
+      setLoading(false);
+      setStatus("Answer Ready");
+    });
 
-    const cleanupClear = window.electronAPI.onClearCue(() => {
+    const cleanupStatus = safeElectron.onStatusUpdate((newStatus: string) => {
+      if (newStatus === "Mode Mismatch") {
+        setModeMismatchWarning(
+          activeTabRef.current === "voice-manual"
+            ? "⚠️ You are in Voice & Manual Ask mode. Switch to Screen OCR mode to use this feature."
+            : "⚠️ You are in Screen OCR mode. Switch to Voice & Manual Ask mode to use this feature.",
+        );
+        setStatus("Mode Mismatch");
+        setLoading(false);
+        return;
+      }
+      if (
+        activeTabRef.current !== "screen" &&
+        (newStatus.includes("Capturing") || newStatus.includes("OCR"))
+      ) {
+        return;
+      }
+      if (newStatus.includes("Capturing") || newStatus.includes("Thinking")) {
+        setLoading(true);
+        setStatus(newStatus);
+      } else if (!newStatus.includes("Voice")) {
+        setLoading(false);
+        setStatus(newStatus);
+      }
+    });
+
+    const cleanupClear = safeElectron.onClearCue(() => {
       setScreenData(null);
       setVoiceData(null);
       setLoading(false);
@@ -319,19 +382,10 @@ export default function Overlay() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-
-      if (typeof cleanupToggle === "function") {
-        (cleanupToggle as unknown as () => void)();
-      }
-      if (typeof cleanupAnswer === "function") {
-        (cleanupAnswer as unknown as () => void)();
-      }
-      if (typeof cleanupStatus === "function") {
-        (cleanupStatus as unknown as () => void)();
-      }
-      if (typeof cleanupClear === "function") {
-        (cleanupClear as unknown as () => void)();
-      }
+      if (typeof cleanupToggle === "function") cleanupToggle();
+      if (typeof cleanupAnswer === "function") cleanupAnswer();
+      if (typeof cleanupStatus === "function") cleanupStatus();
+      if (typeof cleanupClear === "function") cleanupClear();
     };
   }, []);
 
@@ -351,8 +405,7 @@ export default function Overlay() {
         body: JSON.stringify({ capturedText: currentQuery }),
       });
 
-      const result = await response.json();
-
+      const result = await safeParseResponse(response);
       const formattedData = {
         success: result.success ?? true,
         rawText: currentQuery,
@@ -414,19 +467,19 @@ export default function Overlay() {
 
           <div className="flex items-center gap-1 pl-1 border-l border-slate-800">
             <button
-              onClick={() => window.electronAPI?.minimizeWindow?.()}
+              onClick={() => safeElectron.minimizeWindow()}
               className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
             >
               <Minus className="w-3 h-3" />
             </button>
             <button
-              onClick={() => window.electronAPI?.maximizeWindow?.()}
+              onClick={() => safeElectron.maximizeWindow()}
               className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
             >
               <Square className="w-3 h-3" />
             </button>
             <button
-              onClick={() => window.electronAPI?.closeWindow?.()}
+              onClick={() => safeElectron.closeWindow()}
               className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400"
             >
               <X className="w-3 h-3" />

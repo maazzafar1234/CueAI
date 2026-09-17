@@ -24,3 +24,5 @@ Thumbs.db
 public/downloads/*.exe
 
 release-builds/
+
+release/
